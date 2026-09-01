@@ -1,0 +1,43 @@
+services:
+  # ----------------------------------------------------------------------------
+  # Backend API (FastAPI)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: weathergpt-backend
+    runtime: python
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: weathergpt
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SMTP_USE_TLS
+        value: "true"
+
+  # ----------------------------------------------------------------------------
+  # Frontend Web App (Static Site)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: weathergpt-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
