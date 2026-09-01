@@ -5,8 +5,10 @@ export default function WeatherMetrics() {
   const { currentCity, formatTemp } = useWeather();
 
   const humidity = currentCity?.humidity ?? 65;
-  const uvIndex = currentCity?.uvIndex ?? 5;
-  const uvLabel = currentCity?.uvLabel || (uvIndex >= 8 ? 'Very High' : uvIndex >= 6 ? 'High' : uvIndex >= 3 ? 'Mod' : 'Low');
+  const uvIndex = currentCity?.uvIndex ?? 0;
+  const uvLabel = currentCity?.uvLabel || (uvIndex === 0 ? 'Minimal' : (uvIndex >= 8 ? 'Very High' : uvIndex >= 6 ? 'High' : uvIndex >= 3 ? 'Mod' : 'Low'));
+
+
   const windKm = currentCity?.windKm ?? 10;
   const windDirection = currentCity?.windDirection || 'N';
   const windDegrees = currentCity?.windDegrees ?? 0;

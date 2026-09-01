@@ -257,7 +257,8 @@ export async function reverseGeocodeCoords(lat, lon) {
  * Fetches real-time weather, past 30-day telemetry, 7-day future forecast, and 1-year archive climatology from Open-Meteo
  */
 export async function fetchWeatherData({ lat, lon, name = 'Local Area', region = '', country = '', id = '' }) {
-  const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=30&forecast_days=7&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,pressure_msl,visibility,wind_speed_10m,wind_direction_10m,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,uv_index_max,precipitation_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant&timezone=auto`;
+  const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=30&forecast_days=7&current=temperature_2m,relative_humidity_2m,apparent_temperature,dew_point_2m,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,pressure_msl,visibility,wind_speed_10m,wind_direction_10m,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,uv_index_max,precipitation_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant&timezone=auto`;
+
 
   // 1-Year Archive Range
   const now = new Date();
@@ -315,8 +316,23 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
   const totalDailyDays = daily?.time?.length || 0;
   const todayIdx = Math.min(30, Math.max(0, totalDailyDays - 7));
 
-  // Dew point calculation
-  const dewPointC = Math.round(hourly?.dew_point_2m?.[0] ?? (tempC - (100 - humidity) / 5));
+  // Parse Hourly timeline around current local time of the location
+  const hourlyTimeArray = hourly?.time || [];
+  const totalHourlyPoints = hourlyTimeArray.length;
+  
+  let startHourlyIdx = 0;
+  if (totalHourlyPoints > 0) {
+    const currentLocalIsoPrefix = (current.time || '').substring(0, 13);
+    const foundIdx = hourlyTimeArray.findIndex(t => t.startsWith(currentLocalIsoPrefix));
+    if (foundIdx !== -1) {
+      startHourlyIdx = foundIdx;
+    } else {
+      startHourlyIdx = Math.max(0, todayIdx * 24 + new Date().getHours());
+    }
+  }
+
+  // Real-time actual Dew point fetched directly from Open-Meteo API
+  const dewPointC = Math.round(current.dew_point_2m ?? hourly?.dew_point_2m?.[startHourlyIdx] ?? (tempC - (100 - humidity) / 5));
   const dewPointF = Math.round((dewPointC * 9) / 5 + 32);
 
   // Sunrise and Sunset for Today
@@ -325,33 +341,23 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
   const sunrise = formatLocalTime(sunriseIso);
   const sunset = formatLocalTime(sunsetIso);
 
-  const uvIndex = Math.round(daily?.uv_index_max?.[todayIdx] ?? 5);
-  const uvLabel = uvIndex >= 8 ? 'Very High' : uvIndex >= 6 ? 'High' : uvIndex >= 3 ? 'Mod' : 'Low';
+  // Real-time actual UV Index fetched directly from Open-Meteo API (0.0 at night, live hourly UV in daytime)
+  const uvIndex = Math.round(current.uv_index ?? hourly?.uv_index?.[startHourlyIdx] ?? 0);
+  const uvLabel = uvIndex >= 8 ? 'Very High' : uvIndex >= 6 ? 'High' : uvIndex >= 3 ? 'Mod' : uvIndex > 0 ? 'Low' : 'Minimal (Night)';
   const precipProbability = daily?.precipitation_probability_max?.[todayIdx] ?? (current.precipitation > 0 ? 80 : 15);
 
-  // Parse Hourly timeline around current local time
-  const hourlyTimeArray = hourly?.time || [];
-  const totalHourlyPoints = hourlyTimeArray.length;
-  
-  let startHourlyIdx = 0;
-  if (totalHourlyPoints > 0) {
-    const currentIsoPrefix = now.toISOString().substring(0, 13);
-    const foundIdx = hourlyTimeArray.findIndex(t => t.startsWith(currentIsoPrefix));
-    if (foundIdx !== -1) {
-      startHourlyIdx = foundIdx;
-    } else {
-      startHourlyIdx = Math.max(0, todayIdx * 24 + now.getHours());
-    }
-  }
 
   const hourlyItems = [];
   for (let i = 0; i < Math.min(12, totalHourlyPoints - startHourlyIdx); i++) {
     const pointIdx = startHourlyIdx + i;
-    const timeStr = hourlyTimeArray[pointIdx];
-    const itemDate = new Date(timeStr);
-    const itemHour = itemDate.getHours();
+    const timeStr = hourlyTimeArray[pointIdx] || '';
+    const hourPart = parseInt(timeStr.substring(11, 13) || '0', 10);
+    const ampm = hourPart >= 12 ? 'PM' : 'AM';
+    const hour12 = hourPart % 12 || 12;
+    const displayTime = i === 0 ? 'Now' : `${hour12} ${ampm}`;
+
     const itemCode = hourly.weather_code?.[pointIdx] ?? 0;
-    const itemIsDay = itemHour >= 6 && itemHour <= 18 ? 1 : 0;
+    const itemIsDay = hourPart >= 6 && hourPart < 19 ? 1 : 0;
     const itemInterp = interpretWmoCode(itemCode, itemIsDay);
     const hTempC = Math.round(hourly.temperature_2m[pointIdx] ?? tempC);
     const hTempF = Math.round((hTempC * 9) / 5 + 32);
@@ -364,7 +370,7 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
     const hDewF = Math.round((hDewC * 9) / 5 + 32);
 
     hourlyItems.push({
-      time: i === 0 ? 'Now' : itemDate.toLocaleTimeString([], { hour: 'numeric', hour12: true }),
+      time: displayTime,
       icon: itemInterp.icon,
       tempC: hTempC,
       tempF: hTempF,
@@ -378,6 +384,7 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
       condition: itemInterp.condition
     });
   }
+
 
   // Parse 7-Day Future Forecast (Today + next 6 days)
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -709,7 +716,8 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
       badgeColor: precipProbability > 50 ? 'bg-amber-500/10 text-amber-700' : 'bg-emerald-500/10 text-emerald-700',
       text: precipProbability > 50
         ? `Rain chance at ${precipProbability}%. Allow 10-15 min extra travel time for damp roadways.`
-        : `Clear traffic conditions expected across ${name} with optimal visibility (${(hourly?.visibility?.[0] / 1000 || 10).toFixed(1)} km).`
+        : `Clear traffic conditions expected across ${name} with optimal visibility (${(hourly?.visibility?.[startHourlyIdx] / 1000 || 10).toFixed(1)} km).`
+
     },
     {
       id: 'outdoor',
@@ -806,8 +814,9 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
     windKm,
     windDirection,
     windDegrees,
-    visibilityKm: Number(((hourly?.visibility?.[0] || 10000) / 1000).toFixed(1)),
+    visibilityKm: Number(((hourly?.visibility?.[startHourlyIdx] || 10000) / 1000).toFixed(1)),
     uvIndex,
+
     uvLabel,
     precipProbability,
     precipMm,
