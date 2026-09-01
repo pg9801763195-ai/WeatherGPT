@@ -265,34 +265,30 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
   const startArchiveDate = new Date(now.getTime() - 365 * 24 * 3600 * 1000).toISOString().split('T')[0];
   const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startArchiveDate}&end_date=${endArchiveDate}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto`;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
-
   let forecastData;
   let archiveData = null;
 
   try {
-    const [forecastRes, archiveRes] = await Promise.allSettled([
-      fetch(forecastUrl, { signal: controller.signal }),
-      fetch(archiveUrl, { signal: controller.signal })
-    ]);
-
-    if (forecastRes.status !== 'fulfilled' || !forecastRes.value.ok) {
+    const forecastRes = await fetch(forecastUrl);
+    if (!forecastRes.ok) {
       throw new Error(`Failed to fetch live weather telemetry (${forecastRes.status})`);
     }
-
-    forecastData = await forecastRes.value.json();
-
-    if (archiveRes.status === 'fulfilled' && archiveRes.value.ok) {
-      try {
-        archiveData = await archiveRes.value.json();
-      } catch (e) {
-        console.warn('Archive parse warning:', e);
-      }
-    }
-  } finally {
-    clearTimeout(timeoutId);
+    forecastData = await forecastRes.json();
+  } catch (err) {
+    console.error('Forecast fetch error:', err);
+    throw err;
   }
+
+  // Fetch optional 1-year archive asynchronously without blocking live weather
+  try {
+    const archiveRes = await fetch(archiveUrl);
+    if (archiveRes.ok) {
+      archiveData = await archiveRes.json();
+    }
+  } catch (e) {
+    console.warn('Archive fetch warning:', e);
+  }
+
 
   const current = forecastData.current || {};
   const hourly = forecastData.hourly || {};

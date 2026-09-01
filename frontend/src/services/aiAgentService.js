@@ -14,11 +14,12 @@
  * 9. Voice-enabled interaction & Neural TTS speech synthesis
  */
 
-const AGENT_API_BASE = import.meta.env.VITE_API_BASE_URL
-  ? (import.meta.env.VITE_API_BASE_URL.endsWith('/api') ? import.meta.env.VITE_API_BASE_URL : `${import.meta.env.VITE_API_BASE_URL}/api`)
-  : (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:8000/api'
-      : '/api');
+const AGENT_API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+  ? 'http://localhost:8000/api'
+  : (import.meta.env.VITE_API_BASE_URL
+      ? (import.meta.env.VITE_API_BASE_URL.endsWith('/api') ? import.meta.env.VITE_API_BASE_URL : `${import.meta.env.VITE_API_BASE_URL}/api`)
+      : 'https://weathergpt-6uxp.onrender.com/api');
+
 
 
 // Persistent session management across turns for guest sessions
