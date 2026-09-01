@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # Backend API (FastAPI + AI Agent + MongoDB / SMTP)
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: weathergpt_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - weathergpt_net
+
+  # ============================================================================
+  # Frontend Web App (React 18 + Vite + Tailwind + Nginx)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: weathergpt_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - weathergpt_net
+
+networks:
+  weathergpt_net:
+    driver: bridge

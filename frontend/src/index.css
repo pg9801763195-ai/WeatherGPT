@@ -1,0 +1,202 @@
+@import 'leaflet/dist/leaflet.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #F7F8F6;
+    color: #191c1f;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter Tight', 'Inter', sans-serif;
+    letter-spacing: -0.025em;
+  }
+}
+
+/* Material Symbols Uniform Precision Icons */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.icon-fill {
+  font-variation-settings: 'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+}
+
+/* Typography Utility Classes */
+.font-tight {
+  font-family: 'Inter Tight', 'Inter', sans-serif;
+}
+
+.font-label-caps {
+  font-family: 'Inter Tight', 'Inter', sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Crisp Inset & Subtle Border Helper */
+.subtle-border {
+  border: 1px solid rgba(114, 120, 127, 0.12);
+}
+
+.subtle-shadow {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
+}
+
+/* Hide Scrollbars */
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar,
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Focus Visible Accessibility */
+*:focus-visible {
+  outline: 2px solid rgba(42, 96, 136, 0.5);
+  outline-offset: 2px;
+}
+
+/* High Contrast Mode */
+.high-contrast {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+.high-contrast .bg-surface,
+.high-contrast .bg-background {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #475569 !important;
+}
+
+.high-contrast .text-on-surface,
+.high-contrast .text-on-surface-variant {
+  color: #f8fafc !important;
+}
+
+/* Voice Wave Animation */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(42, 96, 136, 0.5);
+  }
+  70% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 16px rgba(42, 96, 136, 0);
+  }
+  100% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(42, 96, 136, 0);
+  }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Atmospheric Weather Particle & Lighting Animations */
+@keyframes rain-fall {
+  0% {
+    transform: translateY(-120%) rotate(12deg);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(220%) rotate(12deg);
+    opacity: 0.1;
+  }
+}
+
+@keyframes snow-fall {
+  0% {
+    transform: translateY(-20px) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  80% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(120vh) translateX(40px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes lightning-flash {
+  0%, 88%, 92%, 100% {
+    opacity: 0;
+  }
+  89% {
+    opacity: 0.85;
+    background-color: rgba(255, 255, 255, 0.4);
+  }
+  90% {
+    opacity: 0.2;
+  }
+  91% {
+    opacity: 0.95;
+    background-color: rgba(230, 240, 255, 0.6);
+  }
+}
+
+@keyframes mist-drift {
+  0% {
+    transform: translateX(-5%) scaleY(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateX(5%) scaleY(1.1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateX(-5%) scaleY(1);
+    opacity: 0.35;
+  }
+}
+
+@keyframes sun-shimmer {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.15) rotate(15deg);
+  }
+}
+
+.animate-rain-drop {
+  animation: rain-fall 0.85s linear infinite;
+}
+
+.animate-snow-flake {
+  animation: snow-fall 7s ease-in-out infinite;
+}
+
+.animate-lightning {
+  animation: lightning-flash 6s ease-in-out infinite;
+}
+
+.animate-mist {
+  animation: mist-drift 12s ease-in-out infinite alternate;
+}
+
+.animate-sunbeam {
+  animation: sun-shimmer 8s ease-in-out infinite;
+}

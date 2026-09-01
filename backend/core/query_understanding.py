@@ -1,0 +1,667 @@
+"""
+Natural Language Query Understanding & Multi-Turn Conversation Memory Engine.
+Transforms user natural language queries across English, Hindi, Hinglish, and regional languages
+into strongly-typed ResolvedQuery models using LLM semantic reasoning, candidate entity extraction,
+dynamic geocoding resolution, and conversational context inheritance.
+"""
+import re
+import json
+import time
+from typing import Optional, Dict, Any, List, Tuple
+from pydantic import BaseModel, Field
+import requests
+
+from config import AgentConfig
+from schemas.weather_schemas import CanonicalIntent, ResolvedQuery
+from core.prompts import QUERY_UNDERSTANDING_SYSTEM_PROMPT
+from tools.location_resolver import LocationResolver
+from utils.gpu_manager import GPUManager
+
+# Aliases for backwards compatibility
+QueryIntent = CanonicalIntent
+StructuredQuery = ResolvedQuery
+
+# Comprehensive stopword & vocabulary blocklist to prevent geocoding general language
+VOCAB_STOPWORDS = {
+    # Pronouns & determiners
+    "the", "a", "an", "this", "that", "these", "those", "is", "it", "its", "it's",
+    "i", "me", "my", "mine", "we", "us", "our", "you", "your", "he", "him", "his",
+    "she", "her", "they", "them", "their", "what", "which", "who", "whom", "whose",
+    "where", "when", "why", "how", "all", "any", "both", "each", "few", "more", "most",
+    "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than",
+    "too", "very", "can", "will", "just", "don", "should", "now",
+    # Verbs & aux
+    "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+    "having", "do", "does", "did", "doing", "would", "could", "should", "shall",
+    "might", "must", "get", "got", "give", "tell", "show", "check", "see", "look",
+    "take", "bring", "put", "let", "make", "know", "think", "need", "want", "help",
+    # Weather & clothing terms that must NEVER be geocoded
+    "weather", "mausam", "climate", "forecast", "temp", "temperature", "rain", "raining",
+    "rainy", "rains", "drizzle", "shower", "showers", "storm", "thunderstorm", "cloud",
+    "clouds", "cloudy", "sunny", "sun", "wind", "windy", "humidity", "humid", "pressure",
+    "heat", "hot", "cold", "warm", "chill", "chilly", "freeze", "freezing", "frost",
+    "fog", "foggy", "mist", "haze", "uv", "aqi", "air", "sky", "skies", "umbrella",
+    "chata", "water", "pani",
+    "clothes", "cloth", "clothing", "wear", "wearing", "wears", "jacket", "hoodie",
+    "sweater", "coat", "raincoat", "outfit", "outfits", "dress", "shirt", "pant",
+    "tshirt", "jeans", "shorts", "shoes", "dry", "drying", "laundry", "hang", "wash",
+    "washing",
+    # Time words
+    "today", "tomorrow", "yesterday", "tonight", "morning", "afternoon", "evening",
+    "night", "day", "days", "week", "weeks", "weekend", "month", "months", "year",
+    "upcoming", "current", "currently", "now", "right", "latest", "past", "history",
+    # Conversational & general words
+    "good", "bad", "nice", "great", "fine", "best", "safe", "unsafe", "outside",
+    "inside", "outdoor", "outdoors", "indoor", "indoors", "car", "bike", "cricket",
+    "match", "play", "playing", "travel", "trip", "tour", "visit", "drive", "commute",
+    "plan", "going", "go", "gone", "went", "suggest", "recommend", "advice", "report",
+    "hello", "hi", "hey", "hola", "thanks", "thank", "please", "ok", "okay", "yes",
+    "no", "yeah", "yep", "nope", "sure",
+    # Hindi / Hinglish vocabulary that must NEVER be geocoded
+    "kya", "hai", "hain", "kaisa", "kaise", "kaisi", "ka", "ki", "ke", "ko", "se",
+    "me", "mein", "par", "pe", "aaj", "kal", "parso", "parson", "hoga", "hogi", "hoge",
+    "rahega", "rahegi", "rahenge", "raha", "rahi", "rahe", "ho", "liye", "batao",
+    "bata", "bataiye", "bol", "bolo", "sunao", "kuch", "aur", "or", "bhai", "yaar",
+    "sab", "theek", "sahi", "accha", "achha", "mast", "badhiya", "bahar", "nikalna",
+    "nikle", "niklo", "jana", "jaana", "jau", "jaye", "jayein", "ghumne", "ghumna",
+    "khel", "khele", "khelna", "dhona", "dho", "dhoye", "kapde", "kapda", "pehne",
+    "pehnu", "pehnna", "pehna", "sukha", "sukhaye", "sukhayein", "sukhao", "sukhana",
+    "barish", "baarish", "pani", "dhan", "chawal", "gehu", "fasal", "kheti", "spray",
+    "chhidkaw", "kare", "karein", "karna", "sakte", "sakta", "sakti", "chahiye",
+    "shukriya", "dhanyawad", "namaste", "haal", "chal", "scene", "chances", "chance"
+}
+
+
+class ConversationContext(BaseModel):
+    """Tracks stateful memory across conversation turns per session."""
+    session_id: str = "default"
+    last_query: Optional[str] = None
+    last_response: Optional[str] = None
+    last_location: Optional[str] = None
+    last_latitude: Optional[float] = None
+    last_longitude: Optional[float] = None
+    last_intent: Optional[CanonicalIntent] = None
+    last_time_reference: Optional[str] = None
+    last_activity: Optional[str] = None
+    last_crop: Optional[str] = None
+    last_weather_parameters: List[str] = Field(default_factory=list)
+    turn_count: int = 0
+    updated_at: float = Field(default_factory=time.time)
+
+    # Backwards-compatible properties
+    @property
+    def current_location(self) -> Optional[str]:
+        return self.last_location
+
+    @current_location.setter
+    def current_location(self, val: Optional[str]):
+        self.last_location = val
+
+    @property
+    def current_intent(self) -> Optional[CanonicalIntent]:
+        return self.last_intent
+
+    @current_intent.setter
+    def current_intent(self, val: Optional[CanonicalIntent]):
+        self.last_intent = val
+
+    @property
+    def current_time_reference(self) -> Optional[str]:
+        return self.last_time_reference
+
+    @current_time_reference.setter
+    def current_time_reference(self, val: Optional[str]):
+        self.last_time_reference = val
+
+    @property
+    def current_activity(self) -> Optional[str]:
+        return self.last_activity
+
+    @current_activity.setter
+    def current_activity(self, val: Optional[str]):
+        self.last_activity = val
+
+    @property
+    def current_crop(self) -> Optional[str]:
+        return self.last_crop
+
+    @current_crop.setter
+    def current_crop(self, val: Optional[str]):
+        self.last_crop = val
+
+
+class ConversationMemory:
+    """Manages multi-turn conversation sessions and contextual inheritance."""
+
+    def __init__(self, ttl_seconds: float = 3600.0):
+        self._sessions: Dict[str, ConversationContext] = {}
+        self.ttl_seconds = ttl_seconds
+
+    def get_context(self, session_id: str = "default") -> ConversationContext:
+        """Retrieve existing context or initialize a fresh one."""
+        now = time.time()
+        if session_id in self._sessions:
+            ctx = self._sessions[session_id]
+            if now - ctx.updated_at < self.ttl_seconds:
+                return ctx
+
+        fresh_ctx = ConversationContext(session_id=session_id, updated_at=now)
+        self._sessions[session_id] = fresh_ctx
+        return fresh_ctx
+
+    def update_context(self, session_id: str, query: str, resolved_query: ResolvedQuery, response_text: str):
+        """Update session state following a processed turn."""
+        ctx = self.get_context(session_id)
+        ctx.last_query = query
+        ctx.last_response = response_text
+        if resolved_query.location:
+            ctx.last_location = resolved_query.location
+            ctx.last_latitude = resolved_query.latitude
+            ctx.last_longitude = resolved_query.longitude
+        if resolved_query.time_reference:
+            ctx.last_time_reference = resolved_query.time_reference
+        if resolved_query.activity:
+            ctx.last_activity = resolved_query.activity
+        if resolved_query.crop:
+            ctx.last_crop = resolved_query.crop
+        if resolved_query.intent != CanonicalIntent.CASUAL_CONVERSATION:
+            ctx.last_intent = resolved_query.intent
+        if resolved_query.weather_parameters:
+            ctx.last_weather_parameters = resolved_query.weather_parameters
+        ctx.turn_count += 1
+        ctx.updated_at = time.time()
+
+    def resolve_follow_up(self, resolved: ResolvedQuery, context: ConversationContext) -> ResolvedQuery:
+        """
+        Applies conversational inheritance rules:
+        - If query is location follow-up/comparison ("or patratu??", "aur Bihar mein?", "what about Patna?"), inherit intent, time, activity.
+        - If query is temporal follow-up ("Parso?", "what about tomorrow?", "and tomorrow?"), inherit location, intent, activity.
+        - If query is parameter follow-up ("Rain ka kya scene hai?", "will it rain?"), inherit location, time.
+        - If query is agro follow-up ("Spray kar sakte hain?"), inherit location, crop, time.
+        """
+        if context.turn_count > 0:
+            raw_q = (resolved.entities.get("raw_query") or "").lower().strip()
+            word_count = len(raw_q.split())
+
+            # Never alter LOCATION_INFO or CASUAL_CONVERSATION intents
+            if resolved.intent in [CanonicalIntent.LOCATION_INFO, CanonicalIntent.CASUAL_CONVERSATION]:
+                return resolved
+
+            # 1. Location follow-up / comparison (e.g. "or patratu??", "aur Bihar mein?", "what about Patna?", "and Patna?")
+            if resolved.location and (resolved.is_follow_up or word_count <= 4):
+                if context.last_intent and resolved.intent in [CanonicalIntent.CURRENT_WEATHER, CanonicalIntent.WEATHER_FORECAST]:
+                    resolved.intent = context.last_intent
+                if context.last_activity and not resolved.activity:
+                    resolved.activity = context.last_activity
+                if context.last_time_reference and resolved.time_reference == "today":
+                    resolved.time_reference = context.last_time_reference
+                if context.last_crop and not resolved.crop:
+                    resolved.crop = context.last_crop
+
+            # 2. Inherit location if omitted in follow-up ("Parso?", "Rain ka kya scene hai?", "Spray kar sakte hain?", "what about tomorrow?")
+            elif not resolved.location and context.last_location and (resolved.is_follow_up or word_count <= 4):
+                resolved.location = context.last_location
+                resolved.latitude = context.last_latitude
+                resolved.longitude = context.last_longitude
+
+            # 3. Inherit agricultural context
+            if resolved.intent == CanonicalIntent.AGRO_ADVISORY:
+                if not resolved.crop and context.last_crop:
+                    resolved.crop = context.last_crop
+                if not resolved.time_reference or resolved.time_reference == "today":
+                    if context.last_time_reference:
+                        resolved.time_reference = context.last_time_reference
+
+            # 4. Inherit activity context
+            if context.last_activity and not resolved.activity and resolved.intent in [CanonicalIntent.OUTDOOR_ACTIVITY, CanonicalIntent.TRAVEL_WEATHER, CanonicalIntent.WEATHER_FORECAST]:
+                resolved.activity = context.last_activity
+
+            # 5. Inherit temporal context if parameter changed without specifying time ("Rain ka kya scene hai?", "will it rain?")
+            if resolved.is_follow_up:
+                if resolved.time_reference == "today" and context.last_time_reference and context.last_time_reference != "today":
+                    resolved.time_reference = context.last_time_reference
+
+        return resolved
+
+
+class QueryUnderstandingEngine:
+    """Semantic Query Understanding Layer powered by Ollama, Dynamic Geocoding, and Resilient Semantic Parsing."""
+
+    def __init__(self, config: Optional[AgentConfig] = None):
+        self.config = config or AgentConfig()
+        self.memory = ConversationMemory()
+        self.location_resolver = LocationResolver(self.config)
+        self._ollama_online = False
+        self._last_ollama_check = 0.0
+
+    def _is_ollama_alive(self) -> bool:
+        """Check Ollama connectivity with cached status."""
+        now = time.time()
+        if now - self._last_ollama_check < 120.0:
+            return self._ollama_online
+
+        self._last_ollama_check = now
+        try:
+            r = requests.get(f"{self.config.ollama_host}/api/tags", timeout=0.2)
+            self._ollama_online = (r.status_code == 200)
+        except Exception:
+            self._ollama_online = False
+        return self._ollama_online
+
+    def _fast_detect_language(self, text: str) -> str:
+        """Detect language script: Devanagari (hi/mr), Telugu (te), Tamil (ta), etc., or Hinglish/English."""
+        if not text:
+            return "en"
+
+        for char in text:
+            code = ord(char)
+            if 0x0900 <= code <= 0x097F:
+                return "hi"
+            if 0x0C00 <= code <= 0x0C7F:
+                return "te"
+            if 0x0B80 <= code <= 0x0BFF:
+                return "ta"
+            if 0x0980 <= code <= 0x09FF:
+                return "bn"
+
+        hinglish_markers = [
+            "kya", "hai", "hain", "aaj", "kal", "parso", "kaise", "kaisa", "ho", "raha", "rahi", "hogi",
+            "hoga", "baarish", "barish", "pani", "chahiye", "kar", "sakte", "kare", "karna", "bhai", "yaar",
+            "batao", "bata", "btao", "dhup", "garmi", "thand", "kapde", "khel", "or", "aur", "kuch", "haal",
+            "chal", "badhiya", "theek", "mast", "sahi", "mein", "me", "se", "ko", "nahi", "nahin", "dhan",
+            "ghumne", "jau", "jana", "jaana", "gadi", "gaadi"
+        ]
+        words = re.findall(r"\b[a-zA-Z]+\b", text.lower())
+        if any(w in hinglish_markers for w in words):
+            return "hinglish"
+
+        return "en"
+
+    def _is_safe_location_candidate(self, candidate: str) -> bool:
+        """Verify that a candidate string is not composed of ordinary vocabulary or stop words."""
+        if not candidate or len(candidate.strip()) < 2:
+            return False
+
+        c_clean = candidate.strip().lower()
+        parts = re.findall(r"\b[a-zA-Z0-9\u0900-\u097F\-]+\b", c_clean)
+        if not parts:
+            return False
+
+        # If any part of the candidate is in VOCAB_STOPWORDS, it's NOT a safe location candidate
+        if any(p in VOCAB_STOPWORDS for p in parts):
+            return False
+
+        return True
+
+    def _extract_location_candidates(self, query: str) -> List[str]:
+        """
+        Extracts potential location candidates strictly using syntactical indicators
+        (routes, prepositions, follow-up markers, or isolated capitalized place tokens).
+        Never passes arbitrary query words to geocoding.
+        """
+        q = query.strip()
+        candidates: List[str] = []
+
+        # 1. Route / Destination Detection (e.g. 'Ranchi se Patratu jaana hai', 'from Delhi to Manali')
+        route_patterns = [
+            r"(?:from\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
+            r"(?:([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\s+se\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\s+(?:jaana|jana|travel|trip))",
+            r"(?:trip\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
+            r"(?:visit\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
+            r"(?:travel\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
+            r"(?:going\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
+            r"(?:tour\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
+            r"(?:to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
+        ]
+        for pat in route_patterns:
+            m = re.search(pat, q, re.IGNORECASE)
+            if m:
+                if len(m.groups()) == 2 and m.group(2):
+                    dest = m.group(2).strip()
+                    if self._is_safe_location_candidate(dest):
+                        candidates.append(dest)
+                elif m.group(1):
+                    dest = m.group(1).strip()
+                    if self._is_safe_location_candidate(dest):
+                        candidates.append(dest)
+
+        # 2. Devanagari Script Prepositional Markers
+        m_hi = re.search(r"([\u0900-\u097F]+)\s+(?:में|का|की|के|से|को|के पास)", q)
+        if m_hi:
+            cand = m_hi.group(1).strip()
+            if self._is_safe_location_candidate(cand):
+                candidates.append(cand)
+
+        # 3. Standard Prepositional Patterns (in X, at X, near X, for X, X mein, X me, X ka, X ki)
+        prep_patterns = [
+            r"\bin\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
+            r"\bat\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
+            r"\bnear\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
+            r"\bfor\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
+            r"\b([A-Za-z\u0900-\u097F]+)\s+mein\b",
+            r"\b([A-Za-z\u0900-\u097F]+)\s+me\b",
+            r"\b([A-Za-z\u0900-\u097F]+)\s+ka\b",
+            r"\b([A-Za-z\u0900-\u097F]+)\s+ki\b",
+            r"\b([A-Za-z\u0900-\u097F]+)\s+ke\s+paas\b",
+            r"\b([A-Za-z\u0900-\u097F]+)\s+ke\b",
+        ]
+        for pat in prep_patterns:
+            m = re.search(pat, q, re.IGNORECASE)
+            if m:
+                cand = m.group(1).strip()
+                if self._is_safe_location_candidate(cand):
+                    candidates.append(cand)
+
+        # 4. Follow-up / Comparison location patterns (e.g. "aur Patratu?", "or patratu??", "what about Patna?", "and Patna?")
+        followup_loc_patterns = [
+            r"(?:what\s+about|how\s+about|and\s+about)\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
+            r"(?:aur|or|and)\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)(?:\?|\s|$)",
+        ]
+        for pat in followup_loc_patterns:
+            m = re.search(pat, q, re.IGNORECASE)
+            if m:
+                cand = m.group(1).strip().rstrip("?").strip()
+                if self._is_safe_location_candidate(cand):
+                    candidates.append(cand)
+
+        # 5. Explicit Capitalized Entity Tokens (only if query contains non-stop capitalized word)
+        words = re.findall(r"\b[A-Za-z\u0900-\u097F\-]+\b", q)
+        for w in words:
+            if w and w[0].isupper() and self._is_safe_location_candidate(w):
+                candidates.append(w)
+
+        # Deduplicate while preserving order
+        seen = set()
+        unique_cands: List[str] = []
+        for c in candidates:
+            c_clean = c.strip()
+            if c_clean.lower() not in seen and len(c_clean) > 1:
+                seen.add(c_clean.lower())
+                unique_cands.append(c_clean)
+
+        return unique_cands
+
+    def _resolve_best_location(self, query: str) -> Optional[str]:
+        """
+        Extracts candidate location tokens from query and verifies against dynamic geocoding.
+        Returns canonical location name if verified.
+        """
+        candidates = self._extract_location_candidates(query)
+        for cand in candidates:
+            geo = self.location_resolver.resolve(cand)
+            if geo:
+                return geo.name
+
+        # Fallback to the first capitalized non-stop candidate if geocoding is offline
+        for cand in candidates:
+            if cand and cand[0].isupper() and self._is_safe_location_candidate(cand):
+                return cand.title()
+
+        return None
+
+    def _extract_entities_fallback(self, query: str, context: Optional[ConversationContext] = None) -> ResolvedQuery:
+        """
+        Authoritative deterministic semantic parser implementing canonical intents and entity resolution.
+        """
+        q = query.strip()
+        q_lower = q.lower()
+        lang = self._fast_detect_language(q)
+
+        # 1. Location Info Intent ("what's my location?", "where am I?", "meri location kya hai?")
+        location_info_patterns = [
+            r"\bwhere\s+am\s+i\b",
+            r"\bwhere\s+i\s+am\b",
+            r"\bwhat(?:'s|s|\s+is)\s+my\s+(?:current\s+)?location\b",
+            r"\bwhat(?:'s|s|\s+is)\s+the\s+current\s+location\b",
+            r"\bcurrent\s+location\??\b",
+            r"\bwhich\s+location\s+(?:am\s+i\s+viewing|is\s+selected|is\s+active)\b",
+            r"\bwhich\s+city\s+(?:am\s+i\s+viewing|is\s+selected|is\s+active)\b",
+            r"\bwhat\s+(?:city|place|location)\s+is\s+(?:this|selected|active)\b",
+            r"\bwhat\s+place\s+is\s+selected\b",
+            r"\bmeri\s+location(?:\s+kya\s+hai)?\b",
+            r"\bmain\s+kaha(?:n)?\s+hoon\b",
+            r"\bhum\s+kaha(?:n)?\s+hain\b",
+            r"\bkaun(?:si|sa)\s+(?:city|location|jagah)\s+selected\s+hai\b",
+            r"\bkaha(?:n)?\s+ka\s+(?:mausam|weather)\s+hai\b"
+        ]
+        is_loc_info = any(re.search(pat, q_lower) for pat in location_info_patterns) or any(
+            phrase in q_lower for phrase in [
+                "whats my location", "what's my location", "what is my location", "where am i",
+                "which location am i viewing", "which city is selected", "what city is this",
+                "current location", "what place is selected", "meri location kya hai",
+                "main kaha hoon", "main kahan hoon", "kaunsi location selected hai"
+            ]
+        )
+        if is_loc_info:
+            return ResolvedQuery(
+                intent=CanonicalIntent.LOCATION_INFO,
+                location="",
+                time_reference="today",
+                weather_parameters=["location_info"],
+                crop=None,
+                activity=None,
+                language=lang,
+                is_follow_up=False,
+                entities={"raw_query": q}
+            )
+
+        # 2. Casual Conversation Intent
+        casual_greetings = [
+            "hello", "hi", "hey", "namaste", "hola", "greetings", "kaise ho", "kaisa hai",
+            "kya haal", "kya chal raha", "aur batao", "or bata", "aur bhai", "sab theek",
+            "kya kar rahe ho", "who are you", "who made you", "what can you do", "joke", "funny",
+            "thanks", "thank you", "shukriya", "dhanyawad", "good night", "bye"
+        ]
+        is_casual = any(g in q_lower for g in casual_greetings) and not any(w in q_lower for w in [
+            "weather", "mausam", "barish", "baarish", "rain", "temp", "forecast", "spray", "crop", "dhan",
+            "ghumne", "trip", "outing", "picnic", "travel", "outside", "bahar", "wear", "clothes", "dry",
+            "cricket", "wash"
+        ])
+        if is_casual:
+            return ResolvedQuery(
+                intent=CanonicalIntent.CASUAL_CONVERSATION,
+                location=None or "New Delhi, India",
+                time_reference="today",
+                weather_parameters=[],
+                language=lang,
+                is_follow_up=False,
+                entities={"raw_query": q}
+            )
+
+        # 3. Time Reference Extraction
+        time_ref = "today"
+        if any(w in q_lower for w in ["parso", "parson", "day after tomorrow", "परसों"]):
+            time_ref = "day_after_tomorrow"
+        elif any(w in q_lower for w in ["kal", "tomorrow", "next day", "upcoming day", "agle din", "कल"]):
+            time_ref = "tomorrow"
+        elif any(w in q_lower for w in ["weekend", "hafta ant"]):
+            time_ref = "weekend"
+        elif any(w in q_lower for w in ["week", "7 days", "next 3 days", "next 5 days", "agle 3 din", "weekly", "सप्ताह"]):
+            time_ref = "next_7_days"
+        elif any(w in q_lower for w in ["yesterday", "beeta kal", "history", "past"]):
+            time_ref = "historical"
+
+        # 4. Location Extraction via Safe Candidate Resolver
+        location = self._resolve_best_location(q)
+
+        # 5. Semantic Intent Classification
+        intent = CanonicalIntent.CURRENT_WEATHER
+        activity = None
+
+
+        # Check Outfit Recommendation ("what clothes should i wear??", "should I wear a jacket?", "kya pehnu")
+        if re.search(r"\b(wear|wearing|jacket|hoodie|sweater|outfit|coat|raincoat|pehne|pehnu|pehnna|pehna)\b", q_lower) or any(
+            phrase in q_lower for phrase in ["clothes should i wear", "what should i wear", "what clothes to wear", "what to wear", "kya pehna chahiye"]
+        ):
+            intent = CanonicalIntent.OUTFIT_RECOMMENDATION
+            activity = "outfit"
+
+        # Check Clothes Drying / Laundry ("can I dry my clothes outside?", "will my clothes dry today?", "kapde sukhana")
+        elif re.search(r"\b(dry|drying|sukha|sukhana|sukhane|sukhayein|laundry)\b", q_lower) and any(
+            w in q_lower for w in ["clothes", "cloth", "laundry", "kapde", "sukha", "dry", "hang"]
+        ):
+            intent = CanonicalIntent.CLOTHES_DRYING
+            activity = "clothes_drying"
+
+        # Check Travel Weather / Sightseeing ("kal Patratu ghumne jau kya?", "trip to Patratu")
+        elif any(w in q_lower for w in ["ghumne", "ghumna", "jau kya", "jaana theek", "jana sahi", "trip", "outing", "picnic", "tour", "visit", "go outside", "bahar jana", "bahar jaana", "travel", "road trip", "sightseeing"]):
+            intent = CanonicalIntent.TRAVEL_WEATHER
+            activity = "travel_sightseeing"
+
+        # Check Outdoor Activity / Sports / Car Wash
+        elif any(w in q_lower for w in ["cricket", "play", "match", "khel"]):
+            intent = CanonicalIntent.OUTDOOR_ACTIVITY
+            activity = "cricket"
+        elif any(w in q_lower for w in ["car wash", "wash my car", "wash my bike", "gaadi dhona", "gadi dhona"]):
+            intent = CanonicalIntent.OUTDOOR_ACTIVITY
+            activity = "car_wash"
+
+        # Check Agro / Farming / Spraying
+        elif any(w in q_lower for w in ["spray", "chhidkaw", "kheti", "crop", "cotton", "paddy", "rice", "wheat", "mustard", "pest", "irrigate", "farming", "dhan", "kapas", "छिड़काव", "फसल", "धान", "खेती", "सिंचाई", "kisan"]):
+            intent = CanonicalIntent.AGRO_ADVISORY
+            activity = "spray"
+
+        # Check Rain / Precipitation
+        elif any(w in q_lower for w in ["rain", "raining", "rainy", "barish", "baarish", "pani", "umbrella", "chata", "shower", "drizzle", "बारिश", "वर्षा", "पानी", "बरसात", "छाता", "rain ka kya scene"]):
+            intent = CanonicalIntent.PRECIPITATION
+
+        # Check Extreme Alert
+        elif any(w in q_lower for w in ["alert", "warning", "cyclone", "flood", "heatwave", "thunderstorm", "hazard", "चेतावनी"]):
+            intent = CanonicalIntent.WEATHER_ALERT
+
+        # Check NWP / Instability
+        elif any(w in q_lower for w in ["nwp", "cape", "cin", "gfs", "wrf", "instability", "convective"]):
+            intent = CanonicalIntent.NWP_ANALYSIS
+
+        # Check Climate trend
+        elif any(w in q_lower for w in ["climate", "trend", "history", "historical", "warming", "decade", "जलवायु"]):
+            intent = CanonicalIntent.HISTORICAL_CLIMATE
+
+        # Check Weather Forecast (if future time reference was extracted or explicit forecast word)
+        elif time_ref != "today" or any(w in q_lower for w in ["forecast", "upcoming", "weekly", "outlook", "पूर्वानुमान"]):
+            intent = CanonicalIntent.WEATHER_FORECAST
+
+        # Default Current Weather
+        else:
+            intent = CanonicalIntent.CURRENT_WEATHER
+
+        # 5. Crop Extraction
+        crop = None
+        crop_map = {
+            "dhan": "Paddy", "paddy": "Paddy", "rice": "Paddy", "chawal": "Paddy", "धान": "Paddy",
+            "kapas": "Cotton", "cotton": "Cotton", "कपास": "Cotton",
+            "gehu": "Wheat", "wheat": "Wheat", "गेहूं": "Wheat",
+            "sarson": "Mustard", "mustard": "Mustard", "सरसों": "Mustard",
+            "soybean": "Soybean", "सोयाबीन": "Soybean",
+            "tamatar": "Tomato", "tomato": "Tomato", "टमाटर": "Tomato",
+            "mirchi": "Chilli", "chilli": "Chilli", "मिर्च": "Chilli"
+        }
+        for k, v in crop_map.items():
+            if re.search(rf"\b{k}\b", q_lower) or k in q:
+                crop = v
+                break
+
+        # 6. Follow-up Detection
+        is_follow_up = False
+        if context and context.turn_count > 0:
+            follow_up_triggers = ["aur", "or", "and", "what about", "how about", "parso", "day after", "spray kar", "rain ka kya", "और", "परसों", "kya scene hai", "and tomorrow", "what about tomorrow", "will it rain"]
+            if any(trig in q_lower for trig in follow_up_triggers) or (len(q.split()) <= 4):
+                is_follow_up = True
+
+        params = ["general_weather"]
+        if intent == CanonicalIntent.PRECIPITATION:
+            params = ["precipitation"]
+        elif intent == CanonicalIntent.OUTFIT_RECOMMENDATION:
+            params = ["temperature", "precipitation", "wind"]
+        elif intent == CanonicalIntent.CLOTHES_DRYING:
+            params = ["precipitation", "humidity", "wind"]
+        elif intent == CanonicalIntent.AGRO_ADVISORY:
+            params = ["spray_safety", "precipitation", "wind"]
+        elif intent in [CanonicalIntent.OUTDOOR_ACTIVITY, CanonicalIntent.TRAVEL_WEATHER]:
+            params = ["precipitation", "temperature", "wind", "general_weather"]
+
+        return ResolvedQuery(
+            intent=intent,
+            location=location or "",
+            time_reference=time_ref,
+            weather_parameters=params,
+            crop=crop,
+            activity=activity,
+            language=lang,
+            is_follow_up=is_follow_up,
+            entities={"raw_query": q}
+        )
+
+    def understand_query(self, query: str, session_id: str = "default") -> ResolvedQuery:
+        """
+        Primary Query Understanding pipeline.
+        Calls Ollama LLM with strict JSON schema, falling back to dynamic semantic candidate parser if offline.
+        """
+        context = self.memory.get_context(session_id)
+        q_clean = query.strip()
+
+        # Fast-path for single-word casual greetings to maintain < 10ms speed
+        if re.match(r"^(hi+|he+y+|he+l+o+|namaste|kaise ho|aur batao|or bata)$", q_clean.lower()):
+            lang = self._fast_detect_language(q_clean)
+            return ResolvedQuery(
+                intent=CanonicalIntent.CASUAL_CONVERSATION,
+                location=context.last_location or "New Delhi, India",
+                time_reference="today",
+                weather_parameters=[],
+                language=lang,
+                is_follow_up=False,
+                entities={"raw_query": q_clean}
+            )
+
+        # Try LLM Semantic Understanding via Ollama
+        if self._is_ollama_alive():
+            try:
+                context_str = f"Previous Context: location={context.last_location or 'None'}, time={context.last_time_reference or 'today'}, activity={context.last_activity or 'None'}, crop={context.last_crop or 'None'}, last_query={context.last_query or 'None'}"
+                prompt = f"{QUERY_UNDERSTANDING_SYSTEM_PROMPT}\n\n{context_str}\n\nUser Query: \"{q_clean}\"\nOutput JSON:"
+
+                gpu_opts = GPUManager.get_ollama_gpu_options() if self.config.use_gpu else {"num_gpu": 0}
+                payload = {
+                    "model": self.config.llm_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json",
+                    "options": {"temperature": 0.0, "num_predict": 256, **gpu_opts}
+                }
+                resp = requests.post(f"{self.config.ollama_host}/api/generate", json=payload, timeout=1.5)
+                if resp.status_code == 200:
+                    raw_json = resp.json().get("response", "").strip()
+                    raw_json = re.sub(r"^```json\s*", "", raw_json)
+                    raw_json = re.sub(r"\s*```$", "", raw_json)
+                    data = json.loads(raw_json)
+
+                    raw_loc = data.get("location")
+                    verified_loc = None
+                    if raw_loc and self._is_safe_location_candidate(raw_loc):
+                        geo = self.location_resolver.resolve(raw_loc)
+                        verified_loc = geo.name if geo else raw_loc.title()
+
+                    raw_intent = data.get("intent", "current_weather")
+                    try:
+                        resolved_intent = CanonicalIntent(raw_intent)
+                    except ValueError:
+                        resolved_intent = CanonicalIntent.CURRENT_WEATHER
+
+                    resolved = ResolvedQuery(
+                        intent=resolved_intent,
+                        location=verified_loc or "",
+                        time_reference=data.get("time_reference", "today"),
+                        target_date=data.get("target_date"),
+                        weather_parameters=data.get("weather_parameters", ["general_weather"]),
+                        crop=data.get("crop"),
+                        activity=data.get("activity") or data.get("activity_context"),
+                        language=data.get("language", self._fast_detect_language(q_clean)),
+                        is_follow_up=data.get("is_follow_up", False),
+                        entities={"raw_query": q_clean, **data.get("entities", {})}
+                    )
+                    return self.memory.resolve_follow_up(resolved, context)
+            except Exception:
+                pass
+
+        # Fallback to deterministic semantic candidate parser with geocoding verification
+        resolved_fallback = self._extract_entities_fallback(q_clean, context)
+        return self.memory.resolve_follow_up(resolved_fallback, context)

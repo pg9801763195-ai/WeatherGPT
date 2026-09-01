@@ -1,0 +1,30 @@
+[
+  {
+    "id": "crop_paddy_01",
+    "topic": "Rice/Paddy Agro-Meteorological Management",
+    "category": "agriculture",
+    "crop": "Paddy",
+    "content": "Paddy requires 1000-1500 mm water throughout growth cycle. Ideal temperature range is 22°C - 32°C. In nursery and tillering stages, maintain 2-3 cm water level. High humidity (>80%) combined with temperatures between 20-28°C triggers fungal blast (Pyricularia oryzae). Avoid excessive urea when blast is spotted; apply Tricyclazole or validamycin. Ensure field bunds are cut to drain excess water during heavy rain alerts."
+  },
+  {
+    "id": "crop_cotton_02",
+    "topic": "Cotton Weather Triggers & Pest Management",
+    "category": "agriculture",
+    "crop": "Cotton",
+    "content": "Cotton requires warm, sunny climate (25°C - 35°C). High rainfall at square formation and boll development causes square shedding and boll rotting. Warm humid weather (RH > 70%, Temp > 28°C) causes rapid outbreak of Whitefly and Pink Bollworm. Spraying must only be performed when wind is below 15 km/h and no rain is expected for 24 hours to prevent pesticide washoff."
+  },
+  {
+    "id": "crop_wheat_03",
+    "topic": "Wheat Climate Sensitivity & Irrigation",
+    "category": "agriculture",
+    "crop": "Wheat",
+    "content": "Wheat is a cool-season Rabi crop. Optimum temperature for tillering is 16-20°C and for grain filling is 20-23°C. Terminal heat stress (sudden rise in temperature > 30°C during February/March) causes premature forced maturity and shriveled grains. Apply light irrigation or spray 0.2% Potassium Nitrate (KNO3) to mitigate terminal heat shock. Dew and cloudy weather favor Yellow Rust (Puccinia striiformis)."
+  },
+  {
+    "id": "crop_mustard_04",
+    "topic": "Mustard / Rapeseed Weather Advisory",
+    "category": "agriculture",
+    "crop": "Mustard",
+    "content": "Mustard requires dry and cool weather. Overcast, cloudy weather with persistent morning fog and relative humidity above 75% triggers heavy Mustard Aphid (Lipaphis erysimi) infestation during flowering and pod development. Inspect borders of fields. Spray insecticides in the late afternoon to avoid harming pollinating honeybees."
+  }
+]

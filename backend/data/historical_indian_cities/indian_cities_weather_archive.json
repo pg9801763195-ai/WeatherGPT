@@ -1,0 +1,106 @@
+[
+  {
+    "city": "Delhi",
+    "state": "Delhi",
+    "latitude": 28.6139,
+    "longitude": 77.2090,
+    "period": "1990-2023",
+    "annual_metrics": [
+      {"year": 1990, "mean_temp_c": 24.8, "max_temp_c": 44.5, "min_temp_c": 4.2, "annual_rainfall_mm": 725.4, "monsoon_rainfall_mm": 612.0, "heatwave_days": 14},
+      {"year": 1995, "mean_temp_c": 25.1, "max_temp_c": 45.2, "min_temp_c": 3.8, "annual_rainfall_mm": 810.2, "monsoon_rainfall_mm": 695.0, "heatwave_days": 16},
+      {"year": 2000, "mean_temp_c": 25.4, "max_temp_c": 45.8, "min_temp_c": 4.5, "annual_rainfall_mm": 680.0, "monsoon_rainfall_mm": 560.0, "heatwave_days": 18},
+      {"year": 2005, "mean_temp_c": 25.6, "max_temp_c": 46.2, "min_temp_c": 3.2, "annual_rainfall_mm": 740.5, "monsoon_rainfall_mm": 630.2, "heatwave_days": 21},
+      {"year": 2010, "mean_temp_c": 25.9, "max_temp_c": 46.8, "min_temp_c": 4.1, "annual_rainfall_mm": 980.0, "monsoon_rainfall_mm": 860.0, "heatwave_days": 22},
+      {"year": 2015, "mean_temp_c": 26.0, "max_temp_c": 47.0, "min_temp_c": 4.0, "annual_rainfall_mm": 620.0, "monsoon_rainfall_mm": 510.5, "heatwave_days": 26},
+      {"year": 2020, "mean_temp_c": 26.2, "max_temp_c": 47.5, "min_temp_c": 3.4, "annual_rainfall_mm": 790.2, "monsoon_rainfall_mm": 680.0, "heatwave_days": 28},
+      {"year": 2023, "mean_temp_c": 26.4, "max_temp_c": 48.1, "min_temp_c": 3.9, "annual_rainfall_mm": 890.5, "monsoon_rainfall_mm": 780.4, "heatwave_days": 31}
+    ],
+    "climatological_normals": {
+      "lpa_annual_rainfall_mm": 750.0,
+      "lpa_monsoon_rainfall_mm": 620.0,
+      "normal_annual_mean_temp_c": 25.1,
+      "warming_trend_c_per_decade": 0.38
+    }
+  },
+  {
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "latitude": 19.0760,
+    "longitude": 72.8777,
+    "period": "1990-2023",
+    "annual_metrics": [
+      {"year": 1990, "mean_temp_c": 27.2, "max_temp_c": 37.5, "min_temp_c": 14.8, "annual_rainfall_mm": 2150.0, "monsoon_rainfall_mm": 2050.0, "extreme_rain_days_gt_100mm": 4},
+      {"year": 1995, "mean_temp_c": 27.4, "max_temp_c": 38.0, "min_temp_c": 15.2, "annual_rainfall_mm": 2240.0, "monsoon_rainfall_mm": 2140.0, "extreme_rain_days_gt_100mm": 5},
+      {"year": 2000, "mean_temp_c": 27.6, "max_temp_c": 38.5, "min_temp_c": 15.0, "annual_rainfall_mm": 2080.0, "monsoon_rainfall_mm": 1990.0, "extreme_rain_days_gt_100mm": 6},
+      {"year": 2005, "mean_temp_c": 27.8, "max_temp_c": 39.0, "min_temp_c": 15.5, "annual_rainfall_mm": 3200.0, "monsoon_rainfall_mm": 3100.0, "extreme_rain_days_gt_100mm": 11},
+      {"year": 2010, "mean_temp_c": 28.0, "max_temp_c": 38.8, "min_temp_c": 16.0, "annual_rainfall_mm": 2450.0, "monsoon_rainfall_mm": 2360.0, "extreme_rain_days_gt_100mm": 7},
+      {"year": 2015, "mean_temp_c": 28.2, "max_temp_c": 39.4, "min_temp_c": 16.2, "annual_rainfall_mm": 1950.0, "monsoon_rainfall_mm": 1880.0, "extreme_rain_days_gt_100mm": 5},
+      {"year": 2020, "mean_temp_c": 28.3, "max_temp_c": 39.8, "min_temp_c": 16.4, "annual_rainfall_mm": 3100.0, "monsoon_rainfall_mm": 2980.0, "extreme_rain_days_gt_100mm": 12},
+      {"year": 2023, "mean_temp_c": 28.5, "max_temp_c": 40.2, "min_temp_c": 16.8, "annual_rainfall_mm": 2850.0, "monsoon_rainfall_mm": 2720.0, "extreme_rain_days_gt_100mm": 10}
+    ],
+    "climatological_normals": {
+      "lpa_annual_rainfall_mm": 2200.0,
+      "lpa_monsoon_rainfall_mm": 2100.0,
+      "normal_annual_mean_temp_c": 27.3,
+      "warming_trend_c_per_decade": 0.32
+    }
+  },
+  {
+    "city": "Bengaluru",
+    "state": "Karnataka",
+    "latitude": 12.9716,
+    "longitude": 77.5946,
+    "period": "1990-2023",
+    "annual_metrics": [
+      {"year": 1990, "mean_temp_c": 23.5, "max_temp_c": 36.0, "min_temp_c": 12.5, "annual_rainfall_mm": 910.0, "monsoon_rainfall_mm": 540.0, "heatwave_days": 0},
+      {"year": 2000, "mean_temp_c": 23.9, "max_temp_c": 36.8, "min_temp_c": 13.0, "annual_rainfall_mm": 950.0, "monsoon_rainfall_mm": 580.0, "heatwave_days": 1},
+      {"year": 2010, "mean_temp_c": 24.3, "max_temp_c": 37.5, "min_temp_c": 13.8, "annual_rainfall_mm": 1020.0, "monsoon_rainfall_mm": 630.0, "heatwave_days": 3},
+      {"year": 2020, "mean_temp_c": 24.6, "max_temp_c": 38.2, "min_temp_c": 14.2, "annual_rainfall_mm": 1180.0, "monsoon_rainfall_mm": 710.0, "heatwave_days": 5},
+      {"year": 2023, "mean_temp_c": 24.9, "max_temp_c": 39.0, "min_temp_c": 14.5, "annual_rainfall_mm": 820.0, "monsoon_rainfall_mm": 480.0, "heatwave_days": 8}
+    ],
+    "climatological_normals": {
+      "lpa_annual_rainfall_mm": 950.0,
+      "lpa_monsoon_rainfall_mm": 560.0,
+      "normal_annual_mean_temp_c": 23.6,
+      "warming_trend_c_per_decade": 0.35
+    }
+  },
+  {
+    "city": "Chennai",
+    "state": "Tamil Nadu",
+    "latitude": 13.0827,
+    "longitude": 80.2707,
+    "period": "1990-2023",
+    "annual_metrics": [
+      {"year": 1990, "mean_temp_c": 28.5, "max_temp_c": 41.5, "min_temp_c": 19.5, "annual_rainfall_mm": 1320.0, "northeast_monsoon_rainfall_mm": 820.0},
+      {"year": 2000, "mean_temp_c": 28.9, "max_temp_c": 42.0, "min_temp_c": 20.0, "annual_rainfall_mm": 1280.0, "northeast_monsoon_rainfall_mm": 790.0},
+      {"year": 2015, "mean_temp_c": 29.3, "max_temp_c": 42.8, "min_temp_c": 20.8, "annual_rainfall_mm": 2100.0, "northeast_monsoon_rainfall_mm": 1600.0},
+      {"year": 2023, "mean_temp_c": 29.6, "max_temp_c": 43.4, "min_temp_c": 21.2, "annual_rainfall_mm": 1550.0, "northeast_monsoon_rainfall_mm": 1050.0}
+    ],
+    "climatological_normals": {
+      "lpa_annual_rainfall_mm": 1380.0,
+      "lpa_northeast_monsoon_mm": 850.0,
+      "normal_annual_mean_temp_c": 28.6,
+      "warming_trend_c_per_decade": 0.30
+    }
+  },
+  {
+    "city": "Nagpur",
+    "state": "Maharashtra",
+    "latitude": 21.1458,
+    "longitude": 79.0882,
+    "period": "1990-2023",
+    "annual_metrics": [
+      {"year": 1990, "mean_temp_c": 26.8, "max_temp_c": 46.0, "min_temp_c": 9.5, "annual_rainfall_mm": 1100.0, "monsoon_rainfall_mm": 980.0, "heatwave_days": 18},
+      {"year": 2000, "mean_temp_c": 27.2, "max_temp_c": 46.8, "min_temp_c": 10.2, "annual_rainfall_mm": 1020.0, "monsoon_rainfall_mm": 910.0, "heatwave_days": 22},
+      {"year": 2010, "mean_temp_c": 27.6, "max_temp_c": 47.8, "min_temp_c": 10.5, "annual_rainfall_mm": 1250.0, "monsoon_rainfall_mm": 1140.0, "heatwave_days": 27},
+      {"year": 2023, "mean_temp_c": 28.0, "max_temp_c": 48.5, "min_temp_c": 11.2, "annual_rainfall_mm": 1080.0, "monsoon_rainfall_mm": 960.0, "heatwave_days": 34}
+    ],
+    "climatological_normals": {
+      "lpa_annual_rainfall_mm": 1120.0,
+      "lpa_monsoon_rainfall_mm": 990.0,
+      "normal_annual_mean_temp_c": 26.9,
+      "warming_trend_c_per_decade": 0.36
+    }
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "sop_nwp_01",
+    "topic": "Numerical Weather Prediction Parameter Interpretation",
+    "category": "nwp",
+    "content": "Convective Available Potential Energy (CAPE) measures buoyant energy in air parcels. CAPE < 1000 J/kg represents marginal instability; 1000-2500 J/kg represents moderate-to-high instability capable of producing strong thunderstorms and hailstorms; CAPE > 2500 J/kg indicates extreme instability capable of producing severe supercells, microbursts, and tornadic squalls. Convective Inhibition (CIN) > 100 J/kg acts as a convective cap preventing storm initiation until surface heating or frontal lifting breaks the cap."
+  },
+  {
+    "id": "sop_heat_action_02",
+    "topic": "National Disaster Management Authority (NDMA) Heat Action Protocol",
+    "category": "disaster_management",
+    "content": "NDMA Heat Action Plan specifies three color alert triggers: Yellow Alert (Hot day advisory, 40-42.9°C) - Keep public informed; Orange Alert (Heatwave warning, 43-44.9°C) - Open public shaded shelters, adjust school/work hours, mobilize oral rehydration centers in rural haats and bus stands; Red Alert (Extreme heat, >= 45°C) - Prohibit outdoor physical work 12 PM-4 PM, alert hospitals for emergency heatstroke triage, ensure water tankers in vulnerable settlements."
+  }
+]

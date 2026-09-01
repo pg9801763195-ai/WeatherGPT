@@ -1,0 +1,70 @@
+# ==============================================================================
+# WeatherGPT .gitignore
+# ==============================================================================
+
+# Environment variables & secrets (CRITICAL: NEVER COMMIT)
+.env
+*.env.local
+*.env.*.local
+.env.development
+.env.test
+
+# Node.js / Frontend
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python & Backend
+__pycache__/
+*/__pycache__/
+*/*/__pycache__/
+*/*/*/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Databases & Vector Stores
+backend/rag/chroma_data/
+*.sqlite
+*.sqlite3
+dump.rdb
+
+# Media & Audio Scratch
+*.mp3
+*.wav
+*.webm
+*.ogg
+backend/multimodal/audio_outputs/*
+!backend/multimodal/audio_outputs/.gitkeep
+
+# IDEs & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Machine Learning & Checkpoints
+lora_weights/
+models/lora_weights/
+*.safetensors
+*.bin
+*.pt

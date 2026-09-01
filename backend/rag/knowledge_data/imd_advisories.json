@@ -1,0 +1,26 @@
+[
+  {
+    "id": "imd_sop_01",
+    "topic": "IMD Rainfall Classification and Alerts",
+    "category": "meteorology",
+    "content": "India Meteorological Department (IMD) classifies rainfall in 24 hours as follows: Very Light Rain: 0.1 to 2.4 mm; Light Rain: 2.5 to 15.5 mm; Moderate Rain: 15.6 to 64.4 mm; Heavy Rain: 64.5 to 115.5 mm (Yellow/Orange Alert); Very Heavy Rain: 115.6 to 204.4 mm (Orange/Red Alert); Extremely Heavy Rain: >= 204.5 mm (Red Alert / High Flood Risk)."
+  },
+  {
+    "id": "imd_sop_02",
+    "topic": "Heatwave Declaration Criteria in India",
+    "category": "extreme_weather",
+    "content": "Heatwave is officially declared when maximum temperature of a station reaches at least 40°C for Plains, 37°C for Coastal areas, and 30°C for Hills. Based on departure from normal: Heatwave: Departure from normal is 4.5°C to 6.4°C; Severe Heatwave: Departure from normal is >= 6.5°C. In Plains, if maximum temperature exceeds 45°C, Heatwave is declared regardless of normal departure."
+  },
+  {
+    "id": "imd_sop_03",
+    "topic": "Cyclone Intensity and Wind Speed Classification",
+    "category": "cyclone",
+    "content": "IMD classifies cyclonic disturbances over the North Indian Ocean by sustained 3-minute surface wind speeds: Low Pressure Area (< 31 km/h), Depression (31-49 km/h), Deep Depression (50-61 km/h), Cyclonic Storm (62-88 km/h), Severe Cyclonic Storm (89-117 km/h), Very Severe Cyclonic Storm (118-166 km/h), Extremely Severe Cyclonic Storm (167-221 km/h), Super Cyclonic Storm (>= 222 km/h)."
+  },
+  {
+    "id": "imd_sop_04",
+    "topic": "Lightning Early Warning & DAMINI Protocol",
+    "category": "lightning_safety",
+    "content": "Lightning is a major cause of rural fatalities in India. When CAPE exceeds 1800 J/kg and cumulonimbus clouds develop, adhere to the 30-30 rule: If time between lightning flash and thunder is under 30 seconds, seek shelter immediately. Avoid water bodies, open tractors, bicycles, wire fences, and tall isolated trees. Squat in 'lightning crouch' with feet together and hands on ears if trapped in open fields."
+  }
+]

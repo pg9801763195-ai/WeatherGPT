@@ -1,0 +1,44 @@
+[
+  {
+    "id": "climateqa_ipcc_ar6_wg1_south_asia_01",
+    "topic": "IPCC AR6 WG1: South Asian Monsoon & Precipitation Projections",
+    "category": "ipcc_climateqa",
+    "source_report": "IPCC AR6 WG1 Chapter 10 / 11 (Physical Science Basis)",
+    "content": "IPCC AR6 WG1 assessment for South Asia: The South Asian summer monsoon precipitation is projected to increase in the long term with high confidence under medium-to-high emission scenarios (SSP2-4.5, SSP3-7.0, SSP5-8.5). Enhanced monsoon rainfall will be accompanied by increased interannual and intra-seasonal variability, characterized by longer dry spells interspersed with more frequent, intense short-duration extreme precipitation events."
+  },
+  {
+    "id": "climateqa_ipcc_ar6_wg1_extremes_02",
+    "topic": "IPCC AR6 WG1: Extreme Heat and Heatwave Attribution in India",
+    "category": "ipcc_climateqa",
+    "source_report": "IPCC AR6 WG1 Chapter 11 (Weather and Climate Extremes)",
+    "content": "IPCC AR6 WG1 concludes that human-induced climate change has intensified the frequency and intensity of extreme heat events across South Asia. In the Indian subcontinent, wet-bulb temperatures (Tw) exceeding 31°C are projected to become significantly more frequent, approaching the physiological threshold of human survivability without mechanical cooling, particularly in the Indo-Gangetic Plain and eastern coastal belts."
+  },
+  {
+    "id": "climateqa_ipcc_ar6_wg1_cyclones_03",
+    "topic": "IPCC AR6 WG1: Tropical Cyclones in North Indian Ocean",
+    "category": "ipcc_climateqa",
+    "source_report": "IPCC AR6 WG1 Chapter 11 / Cross-Chapter Box 9.1",
+    "content": "IPCC AR6 indicates that while total global tropical cyclone frequency may remain steady or slightly decrease, the proportion of intense Category 4-5 cyclones and rapid intensification events is increasing due to elevated Sea Surface Temperatures (SST > 29°C). In the Arabian Sea, pre- and post-monsoon extremely severe cyclonic storms (ESCS) have shown a statistically significant increasing trend over the past four decades."
+  },
+  {
+    "id": "climateqa_ipcc_ar6_wg2_agriculture_04",
+    "topic": "IPCC AR6 WG2: Agricultural Vulnerability & Crop Yield Impacts in India",
+    "category": "ipcc_climateqa",
+    "source_report": "IPCC AR6 WG2 Chapter 10 (Asia) & Chapter 5 (Food and Water)",
+    "content": "IPCC AR6 WG2 projects that unchecked warming of 1.5°C to 2.0°C will lead to a 5% to 15% reduction in wheat and paddy yields in India, primarily driven by terminal heat stress during anthesis/grain-filling and increased pest pressures. Adaptation priorities identified by IPCC include: climate-resilient crop varieties (drought/submergence-tolerant seeds), dynamic weather-indexed crop advisories, drip irrigation expansion, and agroforestry."
+  },
+  {
+    "id": "climateqa_ipcc_ar6_wg2_glaciers_05",
+    "topic": "IPCC AR6 WG2: Hindu Kush Himalaya (HKH) Cryosphere & Water Security",
+    "category": "ipcc_climateqa",
+    "source_report": "IPCC AR6 WG2 Chapter 4 (Water) & Special Report on Ocean and Cryosphere (SROCC)",
+    "content": "Glaciers in the Hindu Kush Himalaya (HKH) provide seasonal meltwater buffer for the Indus, Ganges, and Brahmaputra river basins supporting over 750 million people. Glacier mass loss has accelerated since 2000. Peak water is projected to be reached between 2030 and 2050 for several headwater sub-basins, after which dry-season river discharge will decline, increasing irrigation shortages in the northern plains."
+  },
+  {
+    "id": "climateqa_ipbes_biodiversity_adaptation_06",
+    "topic": "IPBES Global Assessment: Nature-based Solutions for Agro-Climatic Resilience",
+    "category": "ipcc_climateqa",
+    "source_report": "IPBES Global Assessment Report on Biodiversity and Ecosystem Services",
+    "content": "The IPBES Global Assessment highlights that nature-based solutions (NbS) such as agro-ecological farming, traditional intercropping, mangrove buffer restoration along vulnerable coastlines, and farm ponds (jal kunds) significantly mitigate rural climate exposure. Restoring soil organic carbon enhances soil water retention by up to 20%, buffering crops against erratic monsoon dry spells."
+  }
+]
