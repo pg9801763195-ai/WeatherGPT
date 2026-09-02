@@ -7,6 +7,8 @@ export default function SettingsModal() {
     setIsSettingsOpen,
     unit,
     toggleUnit,
+    theme,
+    toggleTheme,
     fontSizeMode,
     setFontSizeMode,
     notificationsEnabled,
@@ -39,8 +41,28 @@ export default function SettingsModal() {
 
         {/* Settings List */}
         <div className="p-6 space-y-5">
-          {/* Temperature Units */}
+          {/* Appearance / Night Mode */}
           <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-body-md text-sm font-semibold text-on-surface">Appearance / Theme</h4>
+              <p className="text-xs text-on-surface-variant/80">Toggle between Night Mode and Light Mode</p>
+            </div>
+            <button
+              onClick={() => {
+                toggleTheme();
+                showToast(theme === 'dark' ? 'Light Mode Enabled' : 'Night Mode Enabled');
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 text-primary font-label-caps text-xs font-bold transition-transform active:scale-95 cursor-pointer hover:bg-primary/20 border border-primary/25"
+            >
+              <span className="material-symbols-outlined text-sm">
+                {theme === 'dark' ? 'dark_mode' : 'light_mode'}
+              </span>
+              <span>{theme === 'dark' ? 'Night Mode' : 'Light Mode'}</span>
+            </button>
+          </div>
+
+          {/* Temperature Units */}
+          <div className="flex items-center justify-between pt-4 border-t border-outline-variant/10">
             <div>
               <h4 className="font-body-md text-sm font-semibold text-on-surface">{t('temperatureUnit')}</h4>
               <p className="text-xs text-on-surface-variant/80">{t('tempUnitDesc')}</p>

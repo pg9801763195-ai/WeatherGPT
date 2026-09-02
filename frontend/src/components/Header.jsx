@@ -13,6 +13,8 @@ export default function Header() {
     setIsLanguageOpen,
     unit,
     toggleUnit,
+    theme,
+    toggleTheme,
     showToast,
     t
   } = useWeather();
@@ -111,6 +113,21 @@ export default function Header() {
             title={`Switch to °${unit === 'C' ? 'F' : 'C'}`}
           >
             °{unit}
+          </button>
+
+          {/* Night / Light Mode Toggle */}
+          <button
+            onClick={() => {
+              toggleTheme();
+              showToast(theme === 'dark' ? 'Light Mode Enabled' : 'Night Mode Enabled');
+            }}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-surface border border-outline-variant/15 text-on-surface-variant hover:text-primary hover:bg-surface-container transition-all cursor-pointer active:scale-95 shadow-sm"
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Night Mode'}
+            aria-label="Toggle Night Mode"
+          >
+            <span className="material-symbols-outlined text-lg">
+              {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+            </span>
           </button>
 
           {/* Language Selector */}

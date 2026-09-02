@@ -141,6 +141,52 @@ export function WeatherProvider({ children }) {
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [weatherError, setWeatherError] = useState(null);
 
+  // Theme / Night Mode State (Persisted in localStorage)
+  const [theme, setThemeState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('weathergpt_theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+      return 'dark'; // Default to sleek night mode
+    } catch {
+      return 'dark';
+    }
+  });
+
+  const isDarkMode = theme === 'dark';
+
+  const setTheme = (newTheme) => {
+    setThemeState(newTheme);
+    try {
+      localStorage.setItem('weathergpt_theme', newTheme);
+    } catch {}
+  };
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+  };
+
+  // Synchronize documentElement and body class with active theme
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const root = document.documentElement;
+      const body = document.body;
+      if (theme === 'dark') {
+        root.classList.add('dark');
+        root.classList.remove('light');
+        body?.classList?.add('dark');
+        body?.classList?.remove('light');
+        root.style.colorScheme = 'dark';
+      } else {
+        root.classList.remove('dark');
+        root.classList.add('light');
+        body?.classList?.remove('dark');
+        body?.classList?.add('light');
+        root.style.colorScheme = 'light';
+      }
+    }
+  }, [theme]);
+
   // Chat Assistant State
   const [chatMessages, setChatMessages] = useState([
     {
@@ -611,8 +657,10 @@ export function WeatherProvider({ children }) {
         isTyping,
         sendChatMessage,
         toggleAudioSpeech,
-        handleFeedback,
-        regenerateAiResponse,
+        theme,
+        setTheme,
+        toggleTheme,
+        isDarkMode,
         clearChatHistory
       }}
 
