@@ -98,11 +98,13 @@ class AgentConfig:
     otp_expiry_minutes: int = int(os.getenv("OTP_EXPIRY_MINUTES", "5"))
     otp_max_attempts: int = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
 
-    # SMTP Email Configuration for OTPs
+    # Email Delivery Configuration (HTTP APIs for Cloud Hosts like Render + SMTP fallback)
+    resend_api_key: Optional[str] = os.getenv("RESEND_API_KEY", None)
+    brevo_api_key: Optional[str] = os.getenv("BREVO_API_KEY", None)
     smtp_host: Optional[str] = os.getenv("SMTP_HOST", os.getenv("EMAIL_HOST", None))
     smtp_port: int = int(os.getenv("SMTP_PORT", os.getenv("EMAIL_PORT", "587")))
     smtp_user: Optional[str] = os.getenv("SMTP_USER", os.getenv("EMAIL_USER", None))
     smtp_password: Optional[str] = os.getenv("SMTP_PASSWORD", os.getenv("EMAIL_PASSWORD", None))
-    smtp_from: str = os.getenv("SMTP_FROM", os.getenv("EMAIL_FROM", "WeatherGPT <noreply@weathergpt.ai>"))
+    smtp_from: str = os.getenv("SMTP_FROM", os.getenv("EMAIL_FROM", "WeatherGPT <onboarding@resend.dev>"))
     smtp_use_tls: bool = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
 

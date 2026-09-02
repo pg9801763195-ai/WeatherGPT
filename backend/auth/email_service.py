@@ -69,7 +69,56 @@ WeatherGPT Team
     print(f" [WEATHERGPT OTP] Code for {recipient_email}: {otp_code}", flush=True)
     print(f"=======================================================\n", flush=True)
 
-    # If SMTP is not configured or uses placeholder credentials
+    # 1. Dispatch via Resend HTTP REST API (Recommended on Render / Cloud - Port 443 HTTPS)
+    if config.resend_api_key:
+        try:
+            import requests
+            headers = {
+                "Authorization": f"Bearer {config.resend_api_key}",
+                "Content-Type": "application/json"
+            }
+            from_sender = config.smtp_from if ("@" in config.smtp_from and not config.smtp_from.startswith("WeatherGPT <noreply")) else "WeatherGPT <onboarding@resend.dev>"
+            payload = {
+                "from": from_sender,
+                "to": [recipient_email],
+                "subject": subject,
+                "html": html_content,
+                "text": plain_content
+            }
+            resp = requests.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=10)
+            if resp.status_code in [200, 201]:
+                print(f"[Email Service] Successfully dispatched OTP email via Resend API to {recipient_email}", flush=True)
+                return True
+            else:
+                print(f"[Email Service] Resend API response ({resp.status_code}): {resp.text}", flush=True)
+        except Exception as err:
+            print(f"[Email Service] Resend API dispatch failed: {err}", flush=True)
+
+    # 2. Dispatch via Brevo (Sendinblue) HTTP API
+    if config.brevo_api_key:
+        try:
+            import requests
+            headers = {
+                "api-key": config.brevo_api_key,
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "sender": {"name": "WeatherGPT", "email": config.smtp_user or "no-reply@weathergpt.ai"},
+                "to": [{"email": recipient_email}],
+                "subject": subject,
+                "htmlContent": html_content,
+                "textContent": plain_content
+            }
+            resp = requests.post("https://api.brevo.com/v3/smtp/email", json=payload, headers=headers, timeout=10)
+            if resp.status_code in [200, 201]:
+                print(f"[Email Service] Successfully dispatched OTP email via Brevo API to {recipient_email}", flush=True)
+                return True
+            else:
+                print(f"[Email Service] Brevo API response ({resp.status_code}): {resp.text}", flush=True)
+        except Exception as err:
+            print(f"[Email Service] Brevo API dispatch failed: {err}", flush=True)
+
+    # 3. Fallback to Standard SMTP (Works on servers where ports 587/465 are unblocked)
     if not config.smtp_host or not config.smtp_user or "your_email" in config.smtp_user:
         print(f"[Email Service] Dev Mode: OTP generated for recipient '{recipient_email}' (Expires in {config.otp_expiry_minutes}m)", flush=True)
         return True
