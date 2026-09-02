@@ -5,7 +5,7 @@ import { MAP_LAYERS, DEFAULT_CITIES } from '../constants/appConfig';
 import { reverseGeocodeCoords } from '../services/weatherApi';
 
 export default function MapAlertCenterTab() {
-  const { currentCity, openAlertModal, loadLiveWeather, formatTemp, unit, showToast } = useWeather();
+  const { currentCity, openAlertModal, loadLiveWeather, formatTemp, unit, showToast, t, translateCondition } = useWeather();
   
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -154,8 +154,8 @@ export default function MapAlertCenterTab() {
     if (!mapContainerRef.current) return;
     if (mapInstanceRef.current) return;
 
-    const initialLat = currentCity?.lat || 23.3441;
-    const initialLon = currentCity?.lon || 85.3096;
+    const initialLat = currentCity?.lat || 20.5937;
+    const initialLon = currentCity?.lon || 78.9629;
 
     const map = L.map(mapContainerRef.current, {
       center: [initialLat, initialLon],
@@ -236,7 +236,7 @@ export default function MapAlertCenterTab() {
     }
 
     if (markerRef.current) {
-      const tempDisplay = formatTemp(currentCity.tempC ?? 20, currentCity.tempF ?? 68);
+      const tempDisplay = currentCity?.tempC !== null && currentCity?.tempC !== undefined ? formatTemp(currentCity.tempC, currentCity.tempF) : '--°';
       markerRef.current.bindPopup(`
         <div style="font-family: 'Inter', sans-serif; padding: 4px; min-width: 140px;">
           <div style="font-weight: 700; font-size: 13px; color: #191c1f;">${currentCity.name}</div>

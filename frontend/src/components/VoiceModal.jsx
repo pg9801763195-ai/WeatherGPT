@@ -24,12 +24,18 @@ export default function VoiceModal() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
-  const quickVoicePrompts = [
-    `Will it rain in ${currentCity.name} tonight?`,
-    `Cotton spray window in Nagpur`,
-    `GFS NWP model CAPE energy`,
-    `Active extreme weather warnings`,
-    `क्या कल बारिश होगी?`
+  const isHi = currentLanguage?.code === 'hi';
+  const activeCityName = currentCity?.name && currentCity.name !== 'Select Location' ? currentCity.name : (isHi ? 'मेरे शहर' : 'my city');
+  const quickVoicePrompts = isHi ? [
+    `क्या आज ${activeCityName} में बारिश होगी?`,
+    `क्या अभी बाहर निकलना या ड्राइव करना सुरक्षित है?`,
+    `आज का तापमान और हवा की गति क्या है?`,
+    `इस वीकेंड ${activeCityName} का मौसम पूर्वानुमान बताएं`
+  ] : [
+    `Will it rain in ${activeCityName} today?`,
+    `Is it safe to go outdoors or drive right now?`,
+    `What is the current temperature & wind speed?`,
+    `Tell me the weekend forecast for ${activeCityName}`
   ];
 
   useEffect(() => {

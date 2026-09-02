@@ -8,50 +8,54 @@ export default function LanguageModal() {
     setIsLanguageOpen,
     currentLanguage,
     setCurrentLanguage,
-    showToast
+    showToast,
+    t
   } = useWeather();
 
   if (!isLanguageOpen) return null;
 
   return (
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-      <div class="bg-surface rounded-2xl border border-outline-variant/20 shadow-2xl max-w-md w-full overflow-hidden">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fadeIn">
+      <div className="bg-surface rounded-3xl border border-outline-variant/20 shadow-2xl max-w-md w-full overflow-hidden">
         {/* Header */}
-        <div class="flex items-center justify-between px-6 py-4 border-b border-outline-variant/15">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary">language</span>
-            <h3 class="font-headline-md text-lg text-on-surface">Language Selector</h3>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/15 bg-surface-container-low/50">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined text-lg">language</span>
+            </div>
+            <h3 className="font-headline-md text-base font-bold text-on-surface">{t('languageSelectorTitle')}</h3>
           </div>
           <button
             onClick={() => setIsLanguageOpen(false)}
-            class="p-1 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors"
+            className="p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors cursor-pointer"
+            aria-label="Close"
           >
-            <span class="material-symbols-outlined text-lg">close</span>
+            <span className="material-symbols-outlined text-lg">close</span>
           </button>
         </div>
 
         {/* Language Options */}
-        <div class="p-6 space-y-2">
+        <div className="p-6 space-y-2">
           {LANGUAGES.map(lang => (
             <button
               key={lang.code}
               onClick={() => {
                 setCurrentLanguage(lang);
                 setIsLanguageOpen(false);
-                showToast(`Language set to ${lang.name}`);
+                showToast(lang.code === 'hi' ? 'भाषा बदलकर हिन्दी कर दी गई है' : `Language set to ${lang.name}`);
               }}
-              class={`w-full flex items-center justify-between p-3 rounded-xl border transition-colors ${
+              className={`w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${
                 currentLanguage.code === lang.code
-                  ? 'bg-primary/10 border-primary text-primary font-bold'
-                  : 'bg-surface border-outline-variant/15 text-on-surface hover:bg-surface-container-low'
+                  ? 'bg-primary/10 border-primary text-primary font-bold shadow-xs'
+                  : 'bg-surface border-outline-variant/15 text-on-surface hover:bg-surface-container-low hover:border-outline-variant/30'
               }`}
             >
-              <div class="flex items-center gap-3">
-                <span class="text-xl">{lang.flag}</span>
-                <span class="font-body-md text-sm">{lang.name}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xl">{lang.flag}</span>
+                <span className="font-body-md text-sm font-medium">{lang.name}</span>
               </div>
               {currentLanguage.code === lang.code && (
-                <span class="material-symbols-outlined text-sm text-primary">check</span>
+                <span className="material-symbols-outlined text-sm text-primary font-bold">check</span>
               )}
             </button>
           ))}

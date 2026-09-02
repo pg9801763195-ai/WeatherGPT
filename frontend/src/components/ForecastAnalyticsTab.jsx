@@ -29,62 +29,41 @@ function generateSmoothSvgPath(points) {
 }
 
 export default function ForecastAnalyticsTab() {
-  const { currentCity, formatTemp, unit } = useWeather();
+  const { currentCity, formatTemp, unit, setIsLocationOpen, t, translateCondition } = useWeather();
   const [selectedRange, setSelectedRange] = useState('trend30d'); // 'trend7d' | 'trend30d' | 'trend1y'
   const [selectedMetric, setSelectedMetric] = useState('temp'); // 'temp' | 'precip' | 'wind'
   const [selectedDayIdx, setSelectedDayIdx] = useState(0);
   const [hoveredPointIdx, setHoveredPointIdx] = useState(null);
 
-  const fallbackAnalytics = {
-    rangeId: 'trend30d',
-    title: 'Past 30 Days Climatology',
-    avgDelta: 'Live Climatology',
-    anomalyDelta: '+0.0°C vs Normal',
-    anomalyType: 'neutral',
-    labels: ['Day 1', 'Day 5', 'Day 10', 'Day 15', 'Day 20', 'Day 25', 'Today'],
-    fullDates: ['2026-08-01', '2026-08-05', '2026-08-10', '2026-08-15', '2026-08-20', '2026-08-25', '2026-08-31'],
-    tempsC: [22, 23, 25, 24, 26, 25, 24],
-    tempsF: [72, 73, 77, 75, 79, 77, 75],
-    tempsMinC: [18, 19, 20, 19, 21, 20, 19],
-    tempsMinF: [64, 66, 68, 66, 70, 68, 66],
-    precipMm: [0, 2.5, 12, 4.1, 0, 1.2, 0],
-    windKm: [10, 14, 18, 12, 11, 15, 12],
-    recordHighC: 28,
-    recordHighF: 82,
-    recordLowC: 16,
-    recordLowF: 61,
-    meanC: 24,
-    meanF: 75,
-    totalPrecipMm: 19.8,
-    maxWindKm: 18,
-    note: 'Real-time telemetry projection powered by Open-Meteo models.'
-  };
+  const isLive = Boolean(currentCity?.isLiveLoaded && currentCity?.sevenDay && currentCity.sevenDay.length > 0);
 
-  const activeAnalytics = currentCity?.analytics?.[selectedRange] || currentCity?.analytics?.trend30d || fallbackAnalytics;
+  if (!isLive) {
+    return (
+      <main className="max-w-7xl mx-auto px-gutter md:px-container-padding-desktop pb-section-gap space-y-8 mt-6">
+        <div className="bg-surface border border-outline-variant/15 rounded-3xl p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+            <span className="material-symbols-outlined text-3xl">insights</span>
+          </div>
+          <div>
+            <h2 className="font-headline-md text-xl text-on-surface font-bold">{t('forecastAnalyticsTitle')}</h2>
+            <p className="text-xs text-on-surface-variant/80 max-w-md mx-auto mt-1">
+              {t('forecastAnalyticsDesc')}
+            </p>
+          </div>
+          <button
+            onClick={() => setIsLocationOpen(true)}
+            className="flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-white hover:bg-primary/90 font-label-caps text-xs tracking-wider transition-all shadow-md active:scale-95 font-bold cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-base">my_location</span>
+            {t('chooseLocationGpsBtn')}
+          </button>
+        </div>
+      </main>
+    );
+  }
 
-  const fallbackSevenDay = [
-    {
-      day: 'Today',
-      formattedDate: 'Today',
-      icon: currentCity?.conditionIcon || 'partly_cloudy_day',
-      condition: currentCity?.condition || 'Partly Cloudy',
-      highC: currentCity?.tempC || 24,
-      highF: currentCity?.tempF || 75,
-      lowC: (currentCity?.tempC || 24) - 5,
-      lowF: (currentCity?.tempF || 75) - 9,
-      precip: currentCity?.precipProbability || 20,
-      precipMm: currentCity?.precipMm || 0.0,
-      humidity: currentCity?.humidity || 65,
-      windKm: currentCity?.windKm || 12,
-      windDir: currentCity?.windDirection || 'SE',
-      uv: currentCity?.uvIndex || 5,
-      sunrise: currentCity?.sunrise || '5:30 AM',
-      sunset: currentCity?.sunset || '6:15 PM',
-      summary: currentCity?.aiInsight || 'Live atmospheric projection.'
-    }
-  ];
-
-  const sevenDayList = (currentCity?.sevenDay && currentCity.sevenDay.length > 0) ? currentCity.sevenDay : fallbackSevenDay;
+  const activeAnalytics = currentCity?.analytics?.[selectedRange] || currentCity?.analytics?.trend30d || {};
+  const sevenDayList = currentCity.sevenDay;
 
   // Compute values for the dynamic chart according to selectedMetric
   let dataPoints = [];

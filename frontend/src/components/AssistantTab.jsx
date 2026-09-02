@@ -15,7 +15,8 @@ export default function AssistantTab() {
     setIsVoiceOpen,
     currentCity,
     currentLanguage,
-    showToast
+    showToast,
+    t
   } = useWeather();
 
   const {
@@ -32,12 +33,23 @@ export default function AssistantTab() {
   const messagesEndRef = useRef(null);
   const inlineRecognitionRef = useRef(null);
 
-  const suggestedQuestions = [
-    `Cotton spray window & agro advisory for ${currentCity.name}`,
-    `GFS NWP model diagnostics & CAPE energy for ${currentCity.name}`,
-    `Active extreme weather alerts for ${currentCity.name}`,
-    `Historical climate trends & warming rates for ${currentCity.name}`,
-    `क्या कल बारिश होगी और धान की बुवाई कर सकते हैं?`
+  const isHi = currentLanguage?.code === 'hi';
+  const cityName = currentCity?.name && currentCity.name !== 'Select Location' ? currentCity.name : (isHi ? 'मेरे शहर' : 'my city');
+
+  const suggestedQuestions = isHi ? [
+    `☔ क्या आज ${cityName} में बारिश होगी? क्या छाता साथ रखें?`,
+    `🚗 क्या अभी ${cityName} में बाहर निकलना या ड्राइव करना सुरक्षित है?`,
+    `🏃 आज ${cityName} में वॉक या कसरत के लिए सबसे अच्छा समय क्या है?`,
+    `👕 आज के मौसम के हिसाब से क्या पहनना सही रहेगा?`,
+    `📅 इस वीकेंड ${cityName} में मौसम कैसा रहेगा?`,
+    `🌾 क्या आज ${cityName} में पौधों या फसलों को पानी देना सही है?`
+  ] : [
+    `☔ Will it rain today in ${cityName}? Should I carry an umbrella?`,
+    `🚗 Is it safe to drive or commute right now in ${cityName}?`,
+    `🏃 Best time for a walk or outdoor workout in ${cityName} today?`,
+    `👕 What should I wear today based on the temperature & weather?`,
+    `📅 What is the weekend weather outlook for ${cityName}?`,
+    `🌾 Is today a good day for gardening or outdoor watering?`
   ];
 
   useEffect(() => {
@@ -120,7 +132,7 @@ export default function AssistantTab() {
               className="text-xs text-on-surface-variant hover:text-error transition-colors flex items-center gap-1 font-medium cursor-pointer"
             >
               <span className="material-symbols-outlined text-sm">delete_sweep</span>
-              Clear
+              {t('clearChat')}
             </button>
           )}
         </div>
@@ -136,10 +148,10 @@ export default function AssistantTab() {
               <span className="material-symbols-outlined text-3xl text-primary">auto_awesome</span>
             </div>
             <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface font-medium">
-              How can WeatherGPT help?
+              {currentLanguage?.code === 'hi' ? 'WeatherGPT आपकी क्या मदद कर सकता है?' : 'How can WeatherGPT help?'}
             </h1>
             <p className="font-body-md text-sm text-on-surface-variant max-w-md mx-auto leading-relaxed">
-              Ask natural questions about forecasts, crop spray windows, GFS NWP model diagnostics, extreme warnings, or multi-decadal climate trends.
+              {t('assistantSub')}
             </p>
           </div>
         )}
@@ -275,7 +287,9 @@ export default function AssistantTab() {
 
       {/* Suggested Follow-up Prompts */}
       <div className="space-y-2">
-        <span className="text-[10px] text-on-surface-variant uppercase tracking-wider block font-label-caps">Suggested Queries</span>
+        <span className="text-[10px] text-on-surface-variant uppercase tracking-wider block font-label-caps">
+          {isHi ? 'सुझाए गए प्रश्न' : 'Suggested Queries'}
+        </span>
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {suggestedQuestions.map((q, idx) => (
             <button
@@ -296,7 +310,7 @@ export default function AssistantTab() {
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder={isListeningInline ? 'Listening to your microphone...' : `Ask WeatherGPT about ${currentCity.name}...`}
+            placeholder={isListeningInline ? (currentLanguage?.code === 'hi' ? 'माइक से सुन रहे हैं...' : 'Listening to your microphone...') : (currentLanguage?.code === 'hi' ? `${currentCity?.name || 'मौसम'} के बारे में पूछें...` : `Ask WeatherGPT about ${currentCity?.name || 'weather'}...`)}
             className="w-full bg-transparent border-none px-6 py-5 font-body-md text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:ring-0 focus:outline-none pr-28"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">

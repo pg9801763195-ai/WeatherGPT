@@ -183,7 +183,7 @@ export default function AuthModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm transition-all animate-fadeIn">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm transition-all animate-fadeIn">
       <div className="relative w-full max-w-md bg-surface text-on-surface rounded-2xl border border-outline-variant/20 shadow-2xl overflow-hidden p-6 sm:p-8">
         
         {/* Close Button */}

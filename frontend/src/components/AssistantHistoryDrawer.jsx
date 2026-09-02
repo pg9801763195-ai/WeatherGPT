@@ -104,7 +104,7 @@ export default function AssistantHistoryDrawer() {
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex justify-end bg-black/50 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-[999] flex justify-end bg-black/50 backdrop-blur-sm animate-fadeIn">
       {/* Backdrop click to dismiss */}
       <div className="flex-grow" onClick={() => setIsHistoryDrawerOpen(false)} />
 

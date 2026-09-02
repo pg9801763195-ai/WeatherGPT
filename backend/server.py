@@ -20,6 +20,7 @@ from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Ensure UTF-8 output on Windows
@@ -69,7 +70,7 @@ app.include_router(history_router)
 
 class ChatQueryRequest(BaseModel):
     query: str
-    location_name: Optional[str] = "Nagpur"
+    location_name: Optional[str] = None
     language_code: Optional[str] = "auto"
     unit: Optional[str] = "C"
     session_id: Optional[str] = "default"
@@ -84,8 +85,8 @@ class TTSRequest(BaseModel):
 
 # --- API Routes ---
 
-@app.get("/")
-def root():
+@app.get("/api")
+def api_root():
     return {
         "status": "online",
         "service": "MausamVani Multimodal Weather AI Agent API",
@@ -391,12 +392,13 @@ async def handle_speech_to_text(file: UploadFile = File(...), language: Optional
 
 
 @app.get("/api/nwp")
-def get_nwp_forecast(location: str = "Nagpur"):
+def get_nwp_forecast(location: Optional[str] = None):
     """Direct NWP Model diagnostic (GFS/WRF/ECMWF, CAPE, CIN, 500hPa)."""
     try:
-        data = agent.nwp_tool.analyze_nwp_forecast(location)
+        loc = location or config.default_location_name
+        data = agent.nwp_tool.analyze_nwp_forecast(loc)
         return {
-            "location": location,
+            "location": loc,
             "model_name": data.model_name,
             "cape_j_kg": data.cape_surface_j_kg,
             "cin_j_kg": data.cin_surface_j_kg,
@@ -409,12 +411,13 @@ def get_nwp_forecast(location: str = "Nagpur"):
 
 
 @app.get("/api/advisory")
-def get_crop_advisory(location: str = "Nagpur", crop: str = "Cotton"):
+def get_crop_advisory(location: Optional[str] = None, crop: str = "Cotton"):
     """Location-based Agricultural Advisory."""
     try:
-        adv = agent.advisory_tool.generate_advisory(location, target_crop=crop)
+        loc = location or config.default_location_name
+        adv = agent.advisory_tool.generate_advisory(loc, target_crop=crop)
         return {
-            "location": location,
+            "location": loc,
             "crop": adv.target_crop,
             "spray_safe": adv.spray_window_safe,
             "spray_advice": adv.spray_recommendation,
@@ -426,12 +429,13 @@ def get_crop_advisory(location: str = "Nagpur", crop: str = "Cotton"):
 
 
 @app.get("/api/alerts")
-def get_extreme_alerts(location: str = "Nagpur"):
+def get_extreme_alerts(location: Optional[str] = None):
     """Active IMD/NDMA CAP Extreme Weather Alerts."""
     try:
-        alerts = agent.alerts_tool.evaluate_hazards(location)
+        loc = location or config.default_location_name
+        alerts = agent.alerts_tool.evaluate_hazards(loc)
         return {
-            "location": location,
+            "location": loc,
             "count": len(alerts),
             "alerts": [
                 {
@@ -463,6 +467,39 @@ def get_climate_trend(location: str = "Delhi"):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Static Frontend Serving for Single-Service Deployment on Render / Local ---
+FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+
+if os.path.exists(FRONTEND_DIST):
+    assets_dir = os.path.join(FRONTEND_DIST, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Never intercept API routes
+        if full_path.startswith("api/") or full_path == "api":
+            raise HTTPException(status_code=404, detail="API route not found")
+        
+        file_path = os.path.join(FRONTEND_DIST, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        index_file = os.path.join(FRONTEND_DIST, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Frontend build not found")
+else:
+    @app.get("/")
+    def fallback_root():
+        return {
+            "status": "online",
+            "service": "MausamVani Multimodal Weather AI Agent API",
+            "version": "1.0.0",
+            "message": "Frontend build not detected. Run 'npm run build' inside frontend/ to serve the UI."
+        }
 
 
 if __name__ == "__main__":

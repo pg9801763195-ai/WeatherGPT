@@ -694,73 +694,102 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
     };
   }
 
-  // Meteorological AI Insights
+  // Meteorological AI Insights (Bilingual EN & HI)
   let aiInsight = `Atmospheric conditions for ${name}: Current temperature is ${tempC}°C with ${interp.condition.toLowerCase()} skies.`;
+  let aiInsightHi = `${name} में मौसम की स्थिति: वर्तमान तापमान ${tempC}°C है और आसमान ${interp.condition} है।`;
+
   if (precipProbability > 60 || current.precipitation > 0) {
     aiInsight = `Precipitation active or likely in ${name} (${precipProbability}% chance). Carry rain gear and exercise caution on wet roads.`;
+    aiInsightHi = `${name} में बारिश की संभावना सक्रिय है (${precipProbability}% संभावना)। बाहर निकलते समय छाता या रेनकोट साथ रखें और गीली सड़कों पर सावधानी से वाहन चलाएं।`;
   } else if (tempC > 32) {
     aiInsight = `Intense solar irradiance and heat in ${name} (${tempC}°C, UV ${uvIndex}). Stay hydrated and seek shade during midday.`;
+    aiInsightHi = `${name} में तेज़ धूप और गर्मी का प्रभाव है (${tempC}°C, यूवी ${uvIndex})। भरपूर पानी पिएं और दोपहर में सीधी धूप से बचें।`;
   } else if (tempC < 5) {
     aiInsight = `Cold front active in ${name} (${tempC}°C, feels like ${feelsLikeC}°C). Layer with thermal outerwear for wind chill.`;
+    aiInsightHi = `${name} में शीतलहर का प्रभाव है (${tempC}°C, महसूस हो रहा ${feelsLikeC}°C)। ठंड से बचाव के लिए गर्म कपड़े पहनें।`;
   } else {
     aiInsight = `Stable atmospheric gradient in ${name}. Ideal temperature window with moderate humidity (${humidity}%) and pleasant outdoor comfort.`;
+    aiInsightHi = `${name} में मौसम शांत और सुहावना है। मध्यम आर्द्रता (${humidity}%) के साथ बाहरी गतिविधियों के लिए अनुकूल समय है।`;
   }
 
-  // Personalized Day-at-a-Glance
+  // Personalized Day-at-a-Glance (Bilingual EN & HI)
   const dayAtAGlance = [
     {
       id: 'commute',
       category: 'Commute',
+      categoryHi: 'यात्रा व आवागमन',
       icon: 'directions_car',
       status: precipProbability > 50 ? 'Wet Pavement' : 'Optimal Routes',
+      statusHi: precipProbability > 50 ? 'सड़क पर फिसलन' : 'सुगम आवागमन',
       badgeColor: precipProbability > 50 ? 'bg-amber-500/10 text-amber-700' : 'bg-emerald-500/10 text-emerald-700',
       text: precipProbability > 50
         ? `Rain chance at ${precipProbability}%. Allow 10-15 min extra travel time for damp roadways.`
-        : `Clear traffic conditions expected across ${name} with optimal visibility (${(hourly?.visibility?.[startHourlyIdx] / 1000 || 10).toFixed(1)} km).`
-
+        : `Clear traffic conditions expected across ${name} with optimal visibility (${(hourly?.visibility?.[startHourlyIdx] / 1000 || 10).toFixed(1)} km).`,
+      textHi: precipProbability > 50
+        ? `बारिश की संभावना ${precipProbability}% है। गीली सड़कों के कारण यात्रा में 10-15 मिनट अतिरिक्त समय लेकर चलें।`
+        : `${name} में साफ़ मौसम और दृश्यता (${(hourly?.visibility?.[startHourlyIdx] / 1000 || 10).toFixed(1)} किमी) के साथ सामान्य यातायात की संभावना है।`
     },
     {
       id: 'outdoor',
       category: 'Outdoor Plans',
+      categoryHi: 'बाहरी योजनाएं',
       icon: 'wb_sunny',
       status: tempC > 32 ? 'High Heat Window' : precipProbability > 50 ? 'Showers Possible' : 'Prime Window',
+      statusHi: tempC > 32 ? 'अत्यधिक गर्मी' : precipProbability > 50 ? 'बारिश की संभावना' : 'अनुकूल समय',
       badgeColor: tempC > 32 ? 'bg-red-500/10 text-red-700' : precipProbability > 50 ? 'bg-blue-500/10 text-blue-700' : 'bg-emerald-500/10 text-emerald-700',
       text: tempC > 32
         ? `Midday temperatures peak at ${tempC}°C. Schedule outdoor activities before 10 AM or after 6 PM.`
-        : `Optimal thermal comfort (${tempC}°C) and wind conditions (${windKm} km/h ${windDirection}).`
+        : `Optimal thermal comfort (${tempC}°C) and wind conditions (${windKm} km/h ${windDirection}).`,
+      textHi: tempC > 32
+        ? `दोपहर में तापमान ${tempC}°C तक पहुंचेगा। बाहरी कार्य सुबह 10 बजे से पहले या शाम 6 बजे के बाद करें।`
+        : `सुखद तापमान (${tempC}°C) और अनुकूल हवा (${windKm} किमी/घंटा ${windDirection}) के साथ बाहर जाने के लिए बढ़िया समय।`
     },
     {
       id: 'protection',
       category: 'Rain & Sun Gear',
+      categoryHi: 'धूप व बारिश से बचाव',
       icon: precipProbability > 40 ? 'umbrella' : 'beach_access',
       status: precipProbability > 40 ? 'Umbrella Advised' : uvIndex >= 6 ? 'Sun Protection' : 'Standard',
+      statusHi: precipProbability > 40 ? 'छाता साथ रखें' : uvIndex >= 6 ? 'धूप से बचाव' : 'सामान्य',
       badgeColor: precipProbability > 40 ? 'bg-purple-500/10 text-purple-700' : 'bg-amber-500/10 text-amber-700',
       text: precipProbability > 40
         ? `Precipitation probability peaks at ${precipProbability}%. Keep a compact umbrella handy.`
-        : `UV Index is ${uvIndex} (${uvLabel}). Sunglasses and SPF protection recommended during daylight.`
+        : `UV Index is ${uvIndex} (${uvLabel}). Sunglasses and SPF protection recommended during daylight.`,
+      textHi: precipProbability > 40
+        ? `बारिश की संभावना ${precipProbability}% तक है। बाहर निकलते समय छाता साथ रखें।`
+        : `यूवी इंडेक्स ${uvIndex} (${uvLabel}) है। धूप का चश्मा और सनस्क्रीन का प्रयोग करें।`
     },
     {
       id: 'health',
       category: 'Atmospheric Health',
+      categoryHi: 'वायुमंडलीय स्वास्थ्य',
       icon: 'health_and_safety',
       status: humidity > 80 ? 'Elevated Moisture' : 'Comfortable',
+      statusHi: humidity > 80 ? 'अधिक नमी' : 'सुखद वातावरण',
       badgeColor: humidity > 80 ? 'bg-teal-500/10 text-teal-700' : 'bg-emerald-500/10 text-emerald-700',
-      text: `Relative humidity at ${humidity}% with dew point at ${dewPointC}°C. Barometric pressure steady at ${pressureHpa} hPa.`
+      text: `Relative humidity at ${humidity}% with dew point at ${dewPointC}°C. Barometric pressure steady at ${pressureHpa} hPa.`,
+      textHi: `सापेक्ष आर्द्रता ${humidity}% और ओस बिंदु ${dewPointC}°C है। वायुमंडलीय दबाव ${pressureHpa} hPa पर स्थिर है।`
     }
   ];
 
-  // Dynamic Severe Meteorological Advisory
+  // Dynamic Severe Meteorological Advisory (Bilingual EN & HI)
   let alert = null;
   if (weatherCode >= 95) {
     alert = {
       id: `alert-storm-${Date.now()}`,
       title: 'Thunderstorm & Convective Advisory',
+      titleHi: 'आंधी-तूफान और वज्रपात की चेतावनी',
       severity: 'severe',
       severityLabel: 'Severe Warning',
+      severityLabelHi: 'गंभीर चेतावनी',
       timing: 'Active Now',
+      timingHi: 'अभी सक्रिय',
       shortDesc: `Active thunderstorm in ${name}. Lightning discharges and heavy localized downpours.`,
+      shortDescHi: `${name} में गरज के साथ आंधी-तूफान और बिजली गिरने की संभावना। भारी बारिश हो सकती है।`,
       fullDesc: `Convective atmospheric instability detected over ${name} region. Wind gusts reaching ${Math.round(current.wind_gusts_10m || windKm * 1.5)} km/h.`,
+      fullDescHi: `${name} क्षेत्र में तेज़ हवाओं और बिजली चमकने के साथ वायुमंडलीय अस्थिरता। हवा की गति ${Math.round(current.wind_gusts_10m || windKm * 1.5)} किमी/घंटा तक पहुंच सकती है।`,
       recommendedAction: 'Stay indoors away from metallic fixtures and tall trees until the storm front clears.',
+      recommendedActionHi: 'तूफान शांत होने तक सुरक्षित पक्के मकान के अंदर रहें, पेड़ों और धातु की वस्तुओं से दूर रहें।',
       affectedAreas: [name, region || 'Surrounding Metropolitan Zone'],
       likelyImpact: 'Surface water runoff and minor transit delays.',
       icon: 'bolt'
@@ -769,12 +798,18 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
     alert = {
       id: `alert-heat-${Date.now()}`,
       title: 'Excessive Heat Advisory',
+      titleHi: 'भीषण लू और अत्यधिक गर्मी की चेतावनी',
       severity: 'warning',
       severityLabel: 'Heat Warning',
+      severityLabelHi: 'लू की चेतावनी',
       timing: '11:00 AM – 5:00 PM',
+      timingHi: 'सुबह 11:00 से शाम 5:00 बजे तक',
       shortDesc: `Extreme thermal index in ${name} exceeding ${tempC}°C with UV index ${uvIndex}.`,
+      shortDescHi: `${name} में भीषण तापमान ${tempC}°C और यूवी इंडेक्स ${uvIndex} तक पहुंचने की संभावना।`,
       fullDesc: `High-pressure atmospheric dome suppressing vertical cloud ventilation and amplifying solar heating.`,
+      fullDescHi: `अत्यधिक वायुमंडलीय दबाव के कारण तेज़ धूप और गर्मी का प्रभाव।`,
       recommendedAction: 'Hydrate frequently, avoid strenuous outdoor exercise during peak solar hours.',
+      recommendedActionHi: 'लगातार पानी या ओआरएस पिएं, दोपहर के समय धूप में कड़ी मेहनत से बचें।',
       affectedAreas: [name],
       likelyImpact: 'Elevated risk of heat fatigue.',
       icon: 'thermostat'
@@ -783,12 +818,18 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
     alert = {
       id: `alert-rain-${Date.now()}`,
       title: 'Precipitation & Rain Advisory',
+      titleHi: 'भारी वर्षा व बारिश की सलाह',
       severity: 'advisory',
       severityLabel: 'Rain Advisory',
+      severityLabelHi: 'वर्षा सलाह',
       timing: 'Next 6-12 Hours',
+      timingHi: 'अगले 6-12 घंटों में',
       shortDesc: `High probability of continuous rain showers (${precipProbability}%) across ${name}.`,
+      shortDescHi: `${name} में लगातार बारिश की संभावना (${precipProbability}%) है।`,
       fullDesc: `Low-pressure maritime moisture trough generating persistent cloud cover and localized precipitation.`,
+      fullDescHi: `कम दबाव के क्षेत्र के कारण घने बादल और बारिश का अनुमान।`,
       recommendedAction: 'Carry waterproof rain gear and drive with low beams.',
+      recommendedActionHi: 'छाता या रेनकोट साथ रखें और वाहन धीमी गति में चलाएं।',
       affectedAreas: [name],
       likelyImpact: 'Wet road surfaces and reduced transit speeds.',
       icon: 'water_drop'
@@ -796,6 +837,7 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
   }
 
   return {
+    isLiveLoaded: true,
     id: id || `${name.toLowerCase().replace(/\s+/g, '-')}-${lat.toFixed(2)}-${lon.toFixed(2)}`,
     name,
     region: region || country || 'Region',
@@ -828,6 +870,7 @@ export async function fetchWeatherData({ lat, lon, name = 'Local Area', region =
     sunset,
     lastUpdated: 'Live from Open-Meteo',
     aiInsight,
+    aiInsightHi,
     dayAtAGlance,
     alert,
     hourly: hourlyItems,

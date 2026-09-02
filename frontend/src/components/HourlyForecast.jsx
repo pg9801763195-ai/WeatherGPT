@@ -24,15 +24,41 @@ function generateHourlySvgPath(points) {
 }
 
 export default function HourlyForecast() {
-  const { currentCity, formatTemp, unit } = useWeather();
+  const { currentCity, formatTemp, unit, setIsLocationOpen, t, translateCondition } = useWeather();
   const [selectedHourIdx, setSelectedHourIdx] = useState(0);
 
-  const fallbackHourly = [
-    { time: 'Now', icon: currentCity?.conditionIcon || 'partly_cloudy_day', tempC: currentCity?.tempC || 24, tempF: currentCity?.tempF || 75, precip: 10, precipMm: 0, humidity: currentCity?.humidity || 65, windKm: currentCity?.windKm || 12, windDir: currentCity?.windDirection || 'SE', dewC: currentCity?.dewPointC || 18, dewF: currentCity?.dewPointF || 64, condition: currentCity?.condition || 'Partly Cloudy' }
-  ];
+  const isLive = Boolean(currentCity?.isLiveLoaded && currentCity?.hourly && currentCity.hourly.length > 0);
 
-  const hourlyList = (currentCity?.hourly && currentCity.hourly.length > 0) ? currentCity.hourly : fallbackHourly;
-  const activeItem = hourlyList[selectedHourIdx] || hourlyList[0] || fallbackHourly[0];
+  if (!isLive) {
+    return (
+      <section className="bg-surface border border-outline-variant/15 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider font-semibold">
+              {t('todaysTimeline')}
+            </h2>
+            <p className="text-[11px] text-on-surface-variant/70 mt-0.5">{t('timelineSub')}</p>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-secondary-container/50 text-on-surface-variant font-label-caps text-[10px] font-semibold">
+            {t('awaitingLocation')}
+          </span>
+        </div>
+        <div className="py-10 text-center flex flex-col items-center justify-center space-y-2">
+          <span className="material-symbols-outlined text-3xl text-on-surface-variant/40">timeline</span>
+          <p className="text-xs text-on-surface-variant/70">{t('awaitingLocationHeroDesc')}</p>
+          <button
+            onClick={() => setIsLocationOpen(true)}
+            className="text-xs text-primary font-bold hover:underline cursor-pointer pt-1"
+          >
+            {t('chooseLocationGpsBtn')} ➔
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const hourlyList = currentCity.hourly;
+  const activeItem = hourlyList[selectedHourIdx] || hourlyList[0];
   const activeHourVisual = resolveWeatherVisual(activeItem?.condition || currentCity?.condition || 'Partly Cloudy');
 
   // Compute dynamic points for hourly curve
@@ -56,12 +82,12 @@ export default function HourlyForecast() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider font-semibold">
-            Today's Timeline &amp; Temp Curve
+            {t('todaysTimeline')}
           </h2>
-          <p className="text-[11px] text-on-surface-variant/70 mt-0.5">Click any hour to inspect micro-atmospheric details</p>
+          <p className="text-[11px] text-on-surface-variant/70 mt-0.5">{t('clickHourInspect')}</p>
         </div>
         <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary font-label-caps text-[10px] font-semibold">
-          Live Timeline
+          {t('liveTimeline')}
         </span>
       </div>
 
@@ -170,25 +196,25 @@ export default function HourlyForecast() {
           </div>
           <div>
             <h4 className="font-body-md font-semibold text-on-surface">
-              {activeItem.time} · {activeItem.condition}
+              {activeItem.time} · {translateCondition(activeItem.condition)}
             </h4>
             <p className="text-on-surface-variant text-[11px]">
-              Precipitation: {activeItem.precip || 0}% ({activeItem.precipMm || 0.0} mm/h)
+              {t('precipitation')}: {activeItem.precip || 0}% ({activeItem.precipMm || 0.0} mm/h)
             </p>
           </div>
         </div>
 
         <div className="flex gap-6 text-on-surface-variant">
           <div>
-            <span className="text-[10px] block text-on-surface-variant/70 uppercase font-label-caps">Humidity</span>
-            <span className="font-bold text-on-surface">{activeItem.humidity || currentCity?.humidity || 65}%</span>
+            <span className="text-[10px] block text-on-surface-variant/70 uppercase font-label-caps">{t('humidity')}</span>
+            <span className="font-bold text-on-surface">{activeItem.humidity || currentCity?.humidity || '--'}%</span>
           </div>
           <div>
-            <span className="text-[10px] block text-on-surface-variant/70 uppercase font-label-caps">Wind</span>
-            <span className="font-bold text-on-surface">{activeItem.windKm || currentCity?.windKm || 10} km/h {activeItem.windDir || currentCity?.windDirection || 'N'}</span>
+            <span className="text-[10px] block text-on-surface-variant/70 uppercase font-label-caps">{t('windVector')}</span>
+            <span className="font-bold text-on-surface">{activeItem.windKm || currentCity?.windKm || '--'} km/h {activeItem.windDir || currentCity?.windDirection || 'N'}</span>
           </div>
           <div>
-            <span className="text-[10px] block text-on-surface-variant/70 uppercase font-label-caps">Dew Point</span>
+            <span className="text-[10px] block text-on-surface-variant/70 uppercase font-label-caps">{t('dewPoint')}</span>
             <span className="font-bold text-on-surface">{formatTemp(activeItem.dewC || currentCity?.dewPointC || 18, activeItem.dewF || currentCity?.dewPointF || 64)}</span>
           </div>
         </div>

@@ -6,9 +6,10 @@ import os
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"))
+# Load environment variables from .env files with override=True
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"), override=True)
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
+
 
 
 @dataclass

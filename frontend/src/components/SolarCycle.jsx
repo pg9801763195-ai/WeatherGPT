@@ -2,16 +2,18 @@ import React from 'react';
 import { useWeather } from '../context/WeatherContext';
 
 export default function SolarCycle() {
-  const { currentCity } = useWeather();
+  const { currentCity, t } = useWeather();
 
-  const sunrise = currentCity?.sunrise || '5:30 AM';
-  const sunset = currentCity?.sunset || '6:15 PM';
+  const isLive = Boolean(currentCity?.isLiveLoaded && currentCity?.sunrise && currentCity.sunrise !== '--:--');
+
+  const sunrise = isLive ? currentCity.sunrise : '--:--';
+  const sunset = isLive ? currentCity.sunset : '--:--';
 
   // Helper to parse time string like "5:30 AM" or "05:30" into minutes from midnight
   const parseTimeToMinutes = (timeStr) => {
-    if (!timeStr) return 360; // 6:00 AM default
+    if (!timeStr || timeStr === '--:--') return null;
     const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-    if (!match) return 360;
+    if (!match) return null;
     let hours = parseInt(match[1], 10);
     const minutes = parseInt(match[2], 10);
     const meridian = match[3] ? match[3].toUpperCase() : null;
@@ -26,7 +28,9 @@ export default function SolarCycle() {
   const sunsetMin = parseTimeToMinutes(sunset);
 
   // Total daylight duration in minutes
-  const daylightMinutes = Math.max(60, sunsetMin > sunriseMin ? sunsetMin - sunriseMin : (24 * 60 - sunriseMin + sunsetMin));
+  const daylightMinutes = (sunriseMin !== null && sunsetMin !== null)
+    ? Math.max(60, sunsetMin > sunriseMin ? sunsetMin - sunriseMin : (24 * 60 - sunriseMin + sunsetMin))
+    : 0;
   const daylightHours = Math.floor(daylightMinutes / 60);
   const daylightRemMin = daylightMinutes % 60;
 
@@ -37,27 +41,27 @@ export default function SolarCycle() {
   let sunProgress = 0.5;
   let isNight = false;
 
-  if (currentMin < sunriseMin) {
-    sunProgress = 0;
-    isNight = true;
-  } else if (currentMin > sunsetMin) {
-    sunProgress = 1;
-    isNight = true;
-  } else {
-    sunProgress = (currentMin - sunriseMin) / daylightMinutes;
+  if (sunriseMin !== null && sunsetMin !== null) {
+    if (currentMin < sunriseMin) {
+      sunProgress = 0;
+      isNight = true;
+    } else if (currentMin > sunsetMin) {
+      sunProgress = 1;
+      isNight = true;
+    } else {
+      sunProgress = (currentMin - sunriseMin) / daylightMinutes;
+    }
   }
 
   // Solar Arc Coordinates (SVG ViewBox: 400 x 140)
-  // Arc path from (40, 110) to (360, 110) peaking at (200, 30)
   const startX = 50;
   const endX = 350;
   const peakY = 25;
   const baseY = 110;
 
   const currentX = startX + sunProgress * (endX - startX);
-  // Quadratic parabolic curve formula: y = 4 * h * t * (1 - t)
-  const t = Math.max(0, Math.min(1, sunProgress));
-  const currentY = baseY - (baseY - peakY) * (4 * t * (1 - t));
+  const tCoord = Math.max(0, Math.min(1, sunProgress));
+  const currentY = baseY - (baseY - peakY) * (4 * tCoord * (1 - tCoord));
 
   return (
     <section className="bg-surface border border-outline-variant/15 rounded-2xl p-6 shadow-sm space-y-5">
@@ -68,13 +72,13 @@ export default function SolarCycle() {
           </div>
           <div>
             <h2 className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider font-semibold">
-              Solar Cycle &amp; Daylight
+              {t('solarCycleTitle')}
             </h2>
-            <p className="text-[11px] text-on-surface-variant/70">Sun trajectory and astronomical daylight window</p>
+            <p className="text-[11px] text-on-surface-variant/70">{t('solarCycleSub')}</p>
           </div>
         </div>
         <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-label-caps text-[10px] font-bold tracking-wide">
-          {daylightHours}h {daylightRemMin}m Daylight
+          {isLive ? `${daylightHours}h ${daylightRemMin}m ${t('daylight')}` : t('awaitingLocation')}
         </span>
       </div>
 
@@ -119,21 +123,23 @@ export default function SolarCycle() {
           <circle cx={endX} cy={baseY} r="5" fill="#ea580c" />
 
           {/* Current Sun / Moon Position Marker along the Arc */}
-          {!isNight ? (
-            <g transform={`translate(${currentX}, ${currentY})`}>
-              <circle cx="0" cy="0" r="14" fill="url(#sunGlow)" />
-              <circle cx="0" cy="0" r="6" fill="#fbbf24" stroke="#ffffff" strokeWidth="2" />
-            </g>
-          ) : (
-            <g transform={`translate(${sunProgress === 0 ? startX : endX}, ${baseY})`}>
-              <circle cx="0" cy="0" r="6" fill="#818cf8" stroke="#ffffff" strokeWidth="2" />
-            </g>
-          )}
+          {isLive ? (
+            !isNight ? (
+              <g transform={`translate(${currentX}, ${currentY})`}>
+                <circle cx="0" cy="0" r="14" fill="url(#sunGlow)" />
+                <circle cx="0" cy="0" r="6" fill="#fbbf24" stroke="#ffffff" strokeWidth="2" />
+              </g>
+            ) : (
+              <g transform={`translate(${sunProgress === 0 ? startX : endX}, ${baseY})`}>
+                <circle cx="0" cy="0" r="6" fill="#818cf8" stroke="#ffffff" strokeWidth="2" />
+              </g>
+            )
+          ) : null}
         </svg>
 
         {/* Floating Realtime Solar State */}
         <div className="absolute top-2 left-4 text-[10px] font-mono text-on-surface-variant font-medium">
-          {!isNight ? '☀️ Sun in Sky' : '🌙 Night Interval'}
+          {isLive ? (!isNight ? t('sunInSky') : t('nightInterval')) : t('awaitingLocation')}
         </div>
       </div>
 
@@ -146,13 +152,13 @@ export default function SolarCycle() {
           </div>
           <div>
             <span className="text-[10px] font-label-caps uppercase text-on-surface-variant font-semibold tracking-wider block">
-              Dawn · Sunrise
+              {t('dawnSunrise')}
             </span>
             <span className="font-tight text-lg font-bold text-on-surface leading-tight block">
               {sunrise}
             </span>
             <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-              Golden Hour Start
+              {isLive ? t('goldenHourStart') : t('pendingSelection')}
             </span>
           </div>
         </div>
@@ -164,13 +170,13 @@ export default function SolarCycle() {
           </div>
           <div>
             <span className="text-[10px] font-label-caps uppercase text-on-surface-variant font-semibold tracking-wider block">
-              Dusk · Sunset
+              {t('duskSunset')}
             </span>
             <span className="font-tight text-lg font-bold text-on-surface leading-tight block">
               {sunset}
             </span>
             <span className="text-[11px] text-orange-600 dark:text-orange-400 font-medium">
-              Civil Twilight End
+              {isLive ? t('civilTwilightEnd') : t('pendingSelection')}
             </span>
           </div>
         </div>

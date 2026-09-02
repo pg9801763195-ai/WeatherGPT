@@ -68,24 +68,6 @@
   outline-offset: 2px;
 }
 
-/* High Contrast Mode */
-.high-contrast {
-  background-color: #0f172a !important;
-  color: #f8fafc !important;
-}
-
-.high-contrast .bg-surface,
-.high-contrast .bg-background {
-  background-color: #1e293b !important;
-  color: #f8fafc !important;
-  border-color: #475569 !important;
-}
-
-.high-contrast .text-on-surface,
-.high-contrast .text-on-surface-variant {
-  color: #f8fafc !important;
-}
-
 /* Voice Wave Animation */
 @keyframes pulse-ring {
   0% {

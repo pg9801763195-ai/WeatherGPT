@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useWeather } from '../context/WeatherContext';
 import { resolveWeatherVisual } from '../utils/weatherVisuals';
+import { POPULAR_CITIES } from '../constants/appConfig';
+import { searchLocations } from '../services/weatherApi';
 
 export default function LocationModal() {
   const {
@@ -11,120 +13,234 @@ export default function LocationModal() {
     savedCities,
     toggleSavedCity,
     formatTemp,
-    setIsSearchOpen,
     detectCurrentLocation,
-    isDetectingLocation
+    isDetectingLocation,
+    t,
+    translateCondition
   } = useWeather();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const debounceTimerRef = useRef(null);
+
+  // Debounced search on user input
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await searchLocations(searchQuery.trim());
+        setSearchResults(results);
+      } catch (err) {
+        console.error('Location search failed:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 350);
+
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [searchQuery]);
 
   if (!isLocationOpen) return null;
 
+  const handleSelectCity = (cityObj) => {
+    switchCity(cityObj);
+    setIsLocationOpen(false);
+    setSearchQuery('');
+  };
+
   return (
-    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-      <div class="bg-surface rounded-2xl border border-outline-variant/20 shadow-2xl max-w-lg w-full overflow-hidden">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fadeIn">
+      <div className="bg-surface rounded-3xl border border-outline-variant/20 shadow-2xl max-w-xl w-full overflow-hidden transition-all">
         {/* Header */}
-        <div class="flex items-center justify-between px-6 py-4 border-b border-outline-variant/15">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary">location_on</span>
-            <h3 class="font-headline-md text-lg text-on-surface">Location Selector</h3>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-outline-variant/15 bg-surface-container-low/50">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined text-xl">location_on</span>
+            </div>
+            <div>
+              <h3 className="font-headline-md text-lg text-on-surface font-bold">{t('chooseYourLocation')}</h3>
+              <p className="text-xs text-on-surface-variant/80">{t('locationModalSubtitle')}</p>
+            </div>
           </div>
           <button
             onClick={() => setIsLocationOpen(false)}
-            class="p-1 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors"
+            className="p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors cursor-pointer"
+            aria-label="Close"
           >
-            <span class="material-symbols-outlined text-lg">close</span>
+            <span className="material-symbols-outlined text-xl">close</span>
           </button>
         </div>
 
         {/* Content */}
-        <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto no-scrollbar">
+        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto no-scrollbar">
           {/* GPS Auto-Detect Button */}
           <button
             onClick={detectCurrentLocation}
             disabled={isDetectingLocation}
-            class="w-full flex items-center justify-center gap-2.5 p-3.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 font-semibold text-sm transition-all active:scale-98 cursor-pointer disabled:opacity-50"
+            className="w-full flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-primary/15 via-primary/10 to-transparent hover:from-primary/25 hover:via-primary/15 border border-primary/30 text-on-surface transition-all active:scale-98 cursor-pointer disabled:opacity-60 shadow-sm hover:shadow group"
           >
-            <span class={`material-symbols-outlined text-lg ${isDetectingLocation ? 'animate-spin' : ''}`}>
-              {isDetectingLocation ? 'sync' : 'my_location'}
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                <span className={`material-symbols-outlined text-xl ${isDetectingLocation ? 'animate-spin' : ''}`}>
+                  {isDetectingLocation ? 'sync' : 'my_location'}
+                </span>
+              </div>
+              <div className="text-left">
+                <span className="block font-headline-md text-sm font-bold text-primary">
+                  {isDetectingLocation ? t('detectingGps') : t('useCurrentLocationGps')}
+                </span>
+                <span className="block text-xs text-on-surface-variant/75">
+                  {t('autoDetectDesc')}
+                </span>
+              </div>
+            </div>
+            <span className="material-symbols-outlined text-primary text-xl group-hover:translate-x-1 transition-transform">
+              arrow_forward
             </span>
-            <span>{isDetectingLocation ? 'Detecting GPS Coordinates...' : 'Use My Current Location (GPS)'}</span>
           </button>
 
-          {/* Active location summary */}
-          <div>
-            <span class="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider block mb-2 font-mono">Current Active Location</span>
-            <div class="bg-secondary-container/30 border border-primary/20 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <h4 class="font-headline-md text-lg text-primary font-semibold">{currentCity.name}{currentCity.country ? `, ${currentCity.country}` : ''}</h4>
-                <p class="text-xs text-on-surface-variant">{currentCity.condition} · Humidity {currentCity.humidity}% · Wind {currentCity.windKm} km/h</p>
-              </div>
-              <span class="text-3xl font-light text-on-surface font-mono">
-                {formatTemp(currentCity.tempC, currentCity.tempF)}
+          {/* Search Input */}
+          <div className="relative">
+            <div className="flex items-center px-4 py-3 rounded-2xl bg-surface-container-low border border-outline-variant/20 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+              <span className={`material-symbols-outlined text-on-surface-variant/70 text-lg mr-2.5 ${isSearching ? 'animate-spin' : ''}`}>
+                {isSearching ? 'sync' : 'search'}
               </span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('searchAnyCityPlaceholder')}
+                className="w-full bg-transparent border-none text-on-surface text-sm placeholder:text-on-surface-variant/50 focus:outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-xs text-on-surface-variant hover:text-on-surface font-medium px-2 py-1 cursor-pointer"
+                >
+                  {t('clearSearch')}
+                </button>
+              )}
             </div>
+
+            {/* Live Search Results */}
+            {searchQuery.trim().length >= 2 && (
+              <div className="mt-2 space-y-1.5 border border-outline-variant/15 rounded-2xl p-2 bg-surface shadow-lg max-h-52 overflow-y-auto">
+                {isSearching && searchResults.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-on-surface-variant/70">Searching global satellites...</div>
+                ) : searchResults.length > 0 ? (
+                  searchResults.map((city) => (
+                    <div
+                      key={city.id}
+                      onClick={() => handleSelectCity(city)}
+                      className="flex items-center justify-between p-3 rounded-xl hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="material-symbols-outlined text-primary text-lg">location_city</span>
+                        <div>
+                          <p className="text-sm font-semibold text-on-surface group-hover:text-primary">{city.name}</p>
+                          <p className="text-xs text-on-surface-variant/70">{city.region ? `${city.region}, ` : ''}{city.country}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono text-on-surface-variant/60">{city.lat.toFixed(2)}°, {city.lon.toFixed(2)}°</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 text-center text-xs text-on-surface-variant/70">No matching locations found for "{searchQuery}"</div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Saved Favorites */}
+          {/* Popular Cities Grid */}
           <div>
-            <div class="flex items-center justify-between mb-3">
-              <span class="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider font-mono">Saved Locations</span>
-              <button
-                onClick={() => {
-                  setIsLocationOpen(false);
-                  setIsSearchOpen(true);
-                }}
-                class="text-xs text-primary hover:underline font-medium flex items-center gap-1 cursor-pointer"
-              >
-                <span class="material-symbols-outlined text-sm">search</span> Search New City
-              </button>
-            </div>
-
-            <div class="space-y-2">
-              {savedCities.map(city => {
-                const isSelected = city.id === currentCity.id || (city.lat === currentCity.lat && city.lon === currentCity.lon);
-                const visual = resolveWeatherVisual(city.condition || 'Partly Cloudy');
-
+            <span className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider block mb-2.5 font-semibold font-mono">
+              {t('popularCities')}
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {POPULAR_CITIES.map((city) => {
+                const isSelected = currentCity?.name === city.name;
                 return (
-                  <div
-                    key={city.id || `${city.lat}-${city.lon}`}
-                    class={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer ${
+                  <button
+                    key={city.id}
+                    onClick={() => handleSelectCity(city)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                       isSelected
-                        ? 'bg-primary/5 border-primary/40 shadow-xs'
-                        : 'bg-surface border-outline-variant/15 hover:border-outline-variant/30'
+                        ? 'bg-primary/10 border-primary text-primary font-bold shadow-xs'
+                        : 'bg-surface-container-lowest border-outline-variant/15 hover:border-primary/30 hover:bg-surface-container-low text-on-surface'
                     }`}
-                    onClick={() => {
-                      switchCity(city);
-                      setIsLocationOpen(false);
-                    }}
                   >
-                    <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center text-primary flex-shrink-0">
-                        <span class="material-symbols-outlined text-base">location_on</span>
-                      </div>
-                      <div>
-                        <h5 class="font-body-md text-sm font-medium text-on-surface">{city.name}</h5>
-                        <p class="text-xs text-on-surface-variant">{city.region ? `${city.region}, ` : ''}{city.country}</p>
-                      </div>
-                    </div>
-
-                    <div class="flex items-center gap-3">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSavedCity(city);
-                        }}
-                        class="text-amber-500 hover:opacity-80 p-1 cursor-pointer"
-                        title="Toggle bookmark"
-                      >
-                        <span class="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
-                          bookmark
-                        </span>
-                      </button>
-                    </div>
-                  </div>
+                    <span className="text-xs font-bold block truncate">{city.name}</span>
+                    <span className="text-[10px] text-on-surface-variant/70 block truncate">{city.country}</span>
+                  </button>
                 );
               })}
             </div>
           </div>
+
+          {/* Current Active Location Summary */}
+          {currentCity?.name && currentCity.name !== 'Select Location' && (
+            <div>
+              <span className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider block mb-2 font-mono font-semibold">
+                {t('currentlyActive')}
+              </span>
+              <div className="bg-secondary-container/30 border border-primary/20 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                  <h4 className="font-headline-md text-base text-primary font-bold">{currentCity.name}{currentCity.country ? `, ${currentCity.country}` : ''}</h4>
+                  <p className="text-xs text-on-surface-variant">{translateCondition(currentCity.condition)} · {t('humidity')}: {currentCity.humidity ?? '--'}% · {t('windLabel')}: {currentCity.windKm ?? '--'} km/h</p>
+                </div>
+                <span className="text-2xl font-light text-on-surface font-mono">
+                  {currentCity.tempC !== null && currentCity.tempC !== undefined ? formatTemp(currentCity.tempC, currentCity.tempF) : '--'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Saved Bookmarks */}
+          {savedCities && savedCities.length > 0 && (
+            <div>
+              <span className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider block mb-2 font-mono font-semibold">
+                {t('savedFavorites')}
+              </span>
+              <div className="space-y-1.5">
+                {savedCities.slice(0, 5).map((city) => (
+                  <div
+                    key={city.id || `${city.lat}-${city.lon}`}
+                    onClick={() => handleSelectCity(city)}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-outline-variant/15 hover:border-primary/30 transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="material-symbols-outlined text-amber-500 text-base" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        star
+                      </span>
+                      <span className="text-xs font-medium text-on-surface group-hover:text-primary">{city.name}</span>
+                      <span className="text-[10px] text-on-surface-variant/60">{city.country}</span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSavedCity(city);
+                      }}
+                      className="text-on-surface-variant/50 hover:text-amber-500 p-1"
+                      title="Toggle bookmark"
+                    >
+                      <span className="material-symbols-outlined text-base">close</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

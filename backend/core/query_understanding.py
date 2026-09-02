@@ -172,12 +172,14 @@ class ConversationMemory:
         ctx.updated_at = time.time()
 
     def resolve_follow_up(self, resolved: ResolvedQuery, context: ConversationContext) -> ResolvedQuery:
+        return self.apply_context_inheritance(resolved, context)
+
+    def apply_context_inheritance(self, resolved: ResolvedQuery, context: ConversationContext) -> ResolvedQuery:
         """
-        Applies conversational inheritance rules:
-        - If query is location follow-up/comparison ("or patratu??", "aur Bihar mein?", "what about Patna?"), inherit intent, time, activity.
-        - If query is temporal follow-up ("Parso?", "what about tomorrow?", "and tomorrow?"), inherit location, intent, activity.
-        - If query is parameter follow-up ("Rain ka kya scene hai?", "will it rain?"), inherit location, time.
-        - If query is agro follow-up ("Spray kar sakte hain?"), inherit location, crop, time.
+        Applies conversational inheritance rules safely:
+        - If location is missing in the query, inherit previous location.
+        - If query is an explicit short location comparison (e.g. "and Patna?", "what about Ranchi?", "aur Delhi?"), inherit previous intent.
+        - NEVER overwrite an explicit new query's intent, activity, or time reference.
         """
         if context.turn_count > 0:
             raw_q = (resolved.entities.get("raw_query") or "").lower().strip()
@@ -187,10 +189,13 @@ class ConversationMemory:
             if resolved.intent in [CanonicalIntent.LOCATION_INFO, CanonicalIntent.CASUAL_CONVERSATION]:
                 return resolved
 
-            # 1. Location follow-up / comparison (e.g. "or patratu??", "aur Bihar mein?", "what about Patna?", "and Patna?")
-            if resolved.location and (resolved.is_follow_up or word_count <= 4):
-                if context.last_intent and resolved.intent in [CanonicalIntent.CURRENT_WEATHER, CanonicalIntent.WEATHER_FORECAST]:
-                    resolved.intent = context.last_intent
+            # 1. Location follow-up / comparison (ONLY for short comparison queries like "and Patna?", "what about Ranchi?", "aur Delhi?")
+            is_pure_location_comparison = bool(
+                re.match(r"^(?:and|aur|what about|how about|or)\s+[A-Za-z\u0900-\u097F\s\-]+(?:\?|$)", raw_q)
+                or (word_count <= 2 and resolved.location and not re.search(r"\b(rain|barish|drive|walk|workout|weather|forecast|weekend|wear|clothes)\b", raw_q))
+            )
+            if is_pure_location_comparison and context.last_intent:
+                resolved.intent = context.last_intent
                 if context.last_activity and not resolved.activity:
                     resolved.activity = context.last_activity
                 if context.last_time_reference and resolved.time_reference == "today":
@@ -198,28 +203,15 @@ class ConversationMemory:
                 if context.last_crop and not resolved.crop:
                     resolved.crop = context.last_crop
 
-            # 2. Inherit location if omitted in follow-up ("Parso?", "Rain ka kya scene hai?", "Spray kar sakte hain?", "what about tomorrow?")
-            elif not resolved.location and context.last_location and (resolved.is_follow_up or word_count <= 4):
+            # 2. Inherit location if completely omitted in current query
+            elif not resolved.location and context.last_location:
                 resolved.location = context.last_location
                 resolved.latitude = context.last_latitude
                 resolved.longitude = context.last_longitude
 
-            # 3. Inherit agricultural context
-            if resolved.intent == CanonicalIntent.AGRO_ADVISORY:
-                if not resolved.crop and context.last_crop:
-                    resolved.crop = context.last_crop
-                if not resolved.time_reference or resolved.time_reference == "today":
-                    if context.last_time_reference:
-                        resolved.time_reference = context.last_time_reference
-
-            # 4. Inherit activity context
-            if context.last_activity and not resolved.activity and resolved.intent in [CanonicalIntent.OUTDOOR_ACTIVITY, CanonicalIntent.TRAVEL_WEATHER, CanonicalIntent.WEATHER_FORECAST]:
-                resolved.activity = context.last_activity
-
-            # 5. Inherit temporal context if parameter changed without specifying time ("Rain ka kya scene hai?", "will it rain?")
-            if resolved.is_follow_up:
-                if resolved.time_reference == "today" and context.last_time_reference and context.last_time_reference != "today":
-                    resolved.time_reference = context.last_time_reference
+            # 3. Inherit crop only if current intent is AGRO_ADVISORY and crop was not specified
+            if resolved.intent == CanonicalIntent.AGRO_ADVISORY and not resolved.crop and context.last_crop:
+                resolved.crop = context.last_crop
 
         return resolved
 
@@ -264,15 +256,18 @@ class QueryUnderstandingEngine:
             if 0x0980 <= code <= 0x09FF:
                 return "bn"
 
-        hinglish_markers = [
-            "kya", "hai", "hain", "aaj", "kal", "parso", "kaise", "kaisa", "ho", "raha", "rahi", "hogi",
-            "hoga", "baarish", "barish", "pani", "chahiye", "kar", "sakte", "kare", "karna", "bhai", "yaar",
-            "batao", "bata", "btao", "dhup", "garmi", "thand", "kapde", "khel", "or", "aur", "kuch", "haal",
-            "chal", "badhiya", "theek", "mast", "sahi", "mein", "me", "se", "ko", "nahi", "nahin", "dhan",
-            "ghumne", "jau", "jana", "jaana", "gadi", "gaadi"
-        ]
-        words = re.findall(r"\b[a-zA-Z]+\b", text.lower())
-        if any(w in hinglish_markers for w in words):
+        # Distinct Hindi/Urdu romanized markers (strictly no English collision words like 'or', 'me', 'in', 'is', 'to', 'so')
+        hinglish_markers = {
+            "kya", "hai", "hain", "aaj", "kal", "parso", "parson", "kaise", "kaisa", "kaisi", "raha", "rahi", "rahe",
+            "hogi", "hoga", "hoge", "baarish", "barish", "chahiye", "sakte", "sakta", "sakti", "karein", "karna", "kare",
+            "bhai", "yaar", "batao", "bataiye", "bata", "btao", "dhup", "dhoop", "garmi", "thand", "thandi", "kapde",
+            "khelna", "aur", "badhiya", "achha", "accha", "theek", "nahi", "nahin", "dhan", "ghumne", "ghumna",
+            "jaana", "jana", "gaadi", "chata", "pehnu", "pehnna", "pehne", "sukha", "sukhana", "sukhayein", "kheti",
+            "chhidkaw", "fasal", "paani"
+        }
+        words = set(re.findall(r"\b[a-zA-Z]+\b", text.lower()))
+        matched = words.intersection(hinglish_markers)
+        if len(matched) >= 1:
             return "hinglish"
 
         return "en"
@@ -460,7 +455,7 @@ class QueryUnderstandingEngine:
         if is_casual:
             return ResolvedQuery(
                 intent=CanonicalIntent.CASUAL_CONVERSATION,
-                location=None or "New Delhi, India",
+                location="",
                 time_reference="today",
                 weather_parameters=[],
                 language=lang,
@@ -488,10 +483,41 @@ class QueryUnderstandingEngine:
         intent = CanonicalIntent.CURRENT_WEATHER
         activity = None
 
+        # Check Travel Weather / Commute / Drive / Road Safety ("is it safe to drive or commute?", "trip to Patratu")
+        if re.search(r"\b(drive|driving|commute|commuting|road|roads|traffic|ride|riding|travel|trip|sightseeing|tour|visit|outing|picnic)\b", q_lower) or any(
+            phrase in q_lower for phrase in [
+                "safe to drive", "safe to commute", "safe to travel", "drive safe", "commute safe",
+                "go outside", "bahar jana", "bahar jaana", "ghumne", "ghumna", "jau kya", "jaana theek",
+                "drive karna", "gaadi chalana", "sadak ka haal", "drive or commute"
+            ]
+        ):
+            intent = CanonicalIntent.TRAVEL_WEATHER
+            activity = "commute_drive" if any(w in q_lower for w in ["drive", "driving", "commute", "road", "traffic", "gaadi", "chalana"]) else "travel_sightseeing"
+
+        # Check Outdoor Activity / Workout / Walk / Running / Sports / Car Wash
+        elif re.search(r"\b(walk|walking|workout|running|run|jog|jogging|exercise|fitness|cricket|sports|play|playing|match)\b", q_lower) or any(
+            phrase in q_lower for phrase in [
+                "best time for a walk", "morning walk", "evening walk", "outdoor workout", "go for a walk",
+                "cricket match", "khelna", "khel", "workout time", "exercise outside", "morning walk ka time", "walk karne", "walk or outdoor workout"
+            ]
+        ):
+            intent = CanonicalIntent.OUTDOOR_ACTIVITY
+            activity = "walk_workout" if any(w in q_lower for w in ["walk", "workout", "run", "running", "jog", "exercise", "fitness"]) else "cricket"
+
+        elif any(w in q_lower for w in ["car wash", "wash my car", "wash my bike", "gaadi dhona", "gadi dhona"]):
+            intent = CanonicalIntent.OUTDOOR_ACTIVITY
+            activity = "car_wash"
+
+        # Check Agro / Farming / Spraying / Gardening / Plant Watering
+        elif re.search(r"\b(garden|gardening|plant|plants|watering|water plants|spray|chhidkaw|kheti|crop|cotton|paddy|rice|wheat|mustard|pest|irrigate|farming|dhan|kapas|kisan)\b", q_lower) or any(
+            phrase in q_lower for phrase in ["water plants", "watering plants", "outdoor watering", "water my plants", "paani dena", "paudho ko paani", "fasal", "gardening or outdoor watering"]
+        ) or any(w in q for w in ["छिड़काव", "फसल", "धान", "खेती", "सिंचाई", "पौधे", "पौधों"]):
+            intent = CanonicalIntent.AGRO_ADVISORY
+            activity = "gardening_watering" if any(w in q_lower for w in ["garden", "plant", "water", "paudhe", "paani", "watering"]) else "spray"
 
         # Check Outfit Recommendation ("what clothes should i wear??", "should I wear a jacket?", "kya pehnu")
-        if re.search(r"\b(wear|wearing|jacket|hoodie|sweater|outfit|coat|raincoat|pehne|pehnu|pehnna|pehna)\b", q_lower) or any(
-            phrase in q_lower for phrase in ["clothes should i wear", "what should i wear", "what clothes to wear", "what to wear", "kya pehna chahiye"]
+        elif re.search(r"\b(wear|wearing|jacket|hoodie|sweater|outfit|coat|raincoat|pehne|pehnu|pehnna|pehna)\b", q_lower) or any(
+            phrase in q_lower for phrase in ["clothes should i wear", "what should i wear", "what clothes to wear", "what to wear", "kya pehna chahiye", "kya pehnu", "what should i wear today"]
         ):
             intent = CanonicalIntent.OUTFIT_RECOMMENDATION
             activity = "outfit"
@@ -503,25 +529,7 @@ class QueryUnderstandingEngine:
             intent = CanonicalIntent.CLOTHES_DRYING
             activity = "clothes_drying"
 
-        # Check Travel Weather / Sightseeing ("kal Patratu ghumne jau kya?", "trip to Patratu")
-        elif any(w in q_lower for w in ["ghumne", "ghumna", "jau kya", "jaana theek", "jana sahi", "trip", "outing", "picnic", "tour", "visit", "go outside", "bahar jana", "bahar jaana", "travel", "road trip", "sightseeing"]):
-            intent = CanonicalIntent.TRAVEL_WEATHER
-            activity = "travel_sightseeing"
-
-        # Check Outdoor Activity / Sports / Car Wash
-        elif any(w in q_lower for w in ["cricket", "play", "match", "khel"]):
-            intent = CanonicalIntent.OUTDOOR_ACTIVITY
-            activity = "cricket"
-        elif any(w in q_lower for w in ["car wash", "wash my car", "wash my bike", "gaadi dhona", "gadi dhona"]):
-            intent = CanonicalIntent.OUTDOOR_ACTIVITY
-            activity = "car_wash"
-
-        # Check Agro / Farming / Spraying
-        elif any(w in q_lower for w in ["spray", "chhidkaw", "kheti", "crop", "cotton", "paddy", "rice", "wheat", "mustard", "pest", "irrigate", "farming", "dhan", "kapas", "छिड़काव", "फसल", "धान", "खेती", "सिंचाई", "kisan"]):
-            intent = CanonicalIntent.AGRO_ADVISORY
-            activity = "spray"
-
-        # Check Rain / Precipitation
+        # Check Rain / Precipitation / Umbrella ("will it rain today?")
         elif any(w in q_lower for w in ["rain", "raining", "rainy", "barish", "baarish", "pani", "umbrella", "chata", "shower", "drizzle", "बारिश", "वर्षा", "पानी", "बरसात", "छाता", "rain ka kya scene"]):
             intent = CanonicalIntent.PRECIPITATION
 
@@ -538,7 +546,7 @@ class QueryUnderstandingEngine:
             intent = CanonicalIntent.HISTORICAL_CLIMATE
 
         # Check Weather Forecast (if future time reference was extracted or explicit forecast word)
-        elif time_ref != "today" or any(w in q_lower for w in ["forecast", "upcoming", "weekly", "outlook", "पूर्वानुमान"]):
+        elif time_ref != "today" or any(w in q_lower for w in ["forecast", "upcoming", "weekly", "weekend", "outlook", "पूर्वानुमान"]):
             intent = CanonicalIntent.WEATHER_FORECAST
 
         # Default Current Weather
@@ -561,11 +569,12 @@ class QueryUnderstandingEngine:
                 crop = v
                 break
 
-        # 6. Follow-up Detection
+        # 6. Follow-up Detection (Strictly for explicit prefix triggers or ultra-short queries without domain nouns)
         is_follow_up = False
         if context and context.turn_count > 0:
-            follow_up_triggers = ["aur", "or", "and", "what about", "how about", "parso", "day after", "spray kar", "rain ka kya", "और", "परसों", "kya scene hai", "and tomorrow", "what about tomorrow", "will it rain"]
-            if any(trig in q_lower for trig in follow_up_triggers) or (len(q.split()) <= 4):
+            if re.match(r"^(?:and|aur|what about|how about|aur batao|and in)\s+", q_lower) or (
+                len(q.split()) <= 3 and not re.search(r"\b(weather|mausam|forecast|rain|barish|drive|commute|walk|workout|gardening|water|weekend|wear|clothes)\b", q_lower)
+            ):
                 is_follow_up = True
 
         params = ["general_weather"]
@@ -605,7 +614,7 @@ class QueryUnderstandingEngine:
             lang = self._fast_detect_language(q_clean)
             return ResolvedQuery(
                 intent=CanonicalIntent.CASUAL_CONVERSATION,
-                location=context.last_location or "New Delhi, India",
+                location="",
                 time_reference="today",
                 weather_parameters=[],
                 language=lang,

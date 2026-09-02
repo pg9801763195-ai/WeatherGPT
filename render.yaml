@@ -1,11 +1,11 @@
 services:
   # ----------------------------------------------------------------------------
-  # Backend API (FastAPI)
+  # Single Unified WeatherGPT Full-Stack Web Service (FastAPI + React Frontend)
   # ----------------------------------------------------------------------------
   - type: web
-    name: weathergpt-backend
+    name: weathergpt
     runtime: python
-    buildCommand: cd backend && pip install -r requirements.txt
+    buildCommand: cd frontend && npm install && npm run build && cd ../backend && pip install -r requirements.txt
     startCommand: cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
@@ -28,16 +28,3 @@ services:
         sync: false
       - key: SMTP_USE_TLS
         value: "true"
-
-  # ----------------------------------------------------------------------------
-  # Frontend Web App (Static Site)
-  # ----------------------------------------------------------------------------
-  - type: web
-    name: weathergpt-frontend
-    runtime: static
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: ./frontend/dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

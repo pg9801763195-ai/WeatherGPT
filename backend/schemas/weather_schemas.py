@@ -49,6 +49,7 @@ class CurrentWeather(BaseModel):
     surface_pressure_hpa: float = Field(description="Surface atmospheric pressure in hPa")
     uv_index: Optional[float] = Field(default=0.0, description="UV Radiation index")
     cloud_cover_pct: Optional[float] = Field(default=0.0, description="Cloud cover percentage")
+    visibility_km: Optional[float] = Field(default=10.0, description="Horizontal visibility in km")
     aqi: Optional[int] = Field(default=None, description="Air Quality Index (1: Good, 2: Fair, 3: Moderate, 4: Poor, 5: Very Poor)")
     aqi_category: Optional[str] = Field(default=None, description="Air Quality Category, e.g. 'Good', 'Moderate', 'Poor'")
     pm2_5: Optional[float] = Field(default=None, description="PM2.5 particulate matter (μg/m³)")

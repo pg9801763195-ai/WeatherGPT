@@ -9,13 +9,12 @@ from email.message import EmailMessage
 from typing import Optional
 from config import AgentConfig
 
-config = AgentConfig()
-
 
 def send_otp_email_sync(recipient_email: str, otp_code: str) -> bool:
     """
     Sends a styled OTP verification email synchronously via SMTP.
     """
+    config = AgentConfig()
     subject = "Your WeatherGPT Verification Code"
     
     # Plaintext fallback
@@ -70,26 +69,28 @@ WeatherGPT Team
     print(f" [WEATHERGPT OTP] Code for {recipient_email}: {otp_code}", flush=True)
     print(f"=======================================================\n", flush=True)
 
-
     # If SMTP is not configured or uses placeholder credentials
     if not config.smtp_host or not config.smtp_user or "your_email" in config.smtp_user:
         print(f"[Email Service] Dev Mode: OTP generated for recipient '{recipient_email}' (Expires in {config.otp_expiry_minutes}m)", flush=True)
         return True
 
-
     try:
+        import email.utils
         msg = EmailMessage()
         msg["Subject"] = subject
         msg["From"] = config.smtp_from
         msg["To"] = recipient_email
+        msg["Reply-To"] = config.smtp_user
+        msg["Date"] = email.utils.formatdate(localtime=True)
+        msg["Message-ID"] = email.utils.make_msgid(domain="gmail.com")
         msg.set_content(plain_content)
         msg.add_alternative(html_content, subtype="html")
 
         if config.smtp_use_tls:
-            server = smtplib.SMTP(config.smtp_host, config.smtp_port, timeout=10)
+            server = smtplib.SMTP(config.smtp_host, config.smtp_port, timeout=12)
             server.starttls()
         else:
-            server = smtplib.SMTP_SSL(config.smtp_host, config.smtp_port, timeout=10)
+            server = smtplib.SMTP_SSL(config.smtp_host, config.smtp_port, timeout=12)
 
         if config.smtp_user and config.smtp_password:
             server.login(config.smtp_user, config.smtp_password)
@@ -100,7 +101,6 @@ WeatherGPT Team
         return True
     except Exception as e:
         print(f"[Email Service] Warning: SMTP delivery to {recipient_email} failed: {e}", flush=True)
-        # Return True in development so users aren't blocked if SMTP server credentials are being configured
         return True
 
 

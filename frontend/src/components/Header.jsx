@@ -13,7 +13,8 @@ export default function Header() {
     setIsLanguageOpen,
     unit,
     toggleUnit,
-    showToast
+    showToast,
+    t
   } = useWeather();
 
   const {
@@ -34,7 +35,7 @@ export default function Header() {
             className="font-headline-md text-xl font-bold tracking-tight text-on-surface dark:text-surface-bright text-left cursor-pointer hover:opacity-85 transition-opacity flex items-center gap-2"
           >
             <span className="text-primary font-mono">⚡</span>
-            <span>WeatherGPT</span>
+            <span>{t('appName')}</span>
           </button>
 
           <nav className="hidden md:flex gap-6 items-center">
@@ -46,7 +47,7 @@ export default function Header() {
                   : 'text-on-surface-variant/80 hover:text-primary'
               }`}
             >
-              Overview
+              {t('tabOverview')}
             </button>
             <button
               onClick={() => setActiveTab('forecast')}
@@ -56,7 +57,7 @@ export default function Header() {
                   : 'text-on-surface-variant/80 hover:text-primary'
               }`}
             >
-              Forecast
+              {t('tabForecast')}
             </button>
             <button
               onClick={() => setActiveTab('map')}
@@ -66,7 +67,7 @@ export default function Header() {
                   : 'text-on-surface-variant/80 hover:text-primary'
               }`}
             >
-              Map
+              {t('tabMap')}
             </button>
             <button
               onClick={() => setActiveTab('assistant')}
@@ -76,7 +77,7 @@ export default function Header() {
                   : 'text-on-surface-variant/80 hover:text-primary'
               }`}
             >
-              Assistant
+              {t('tabAssistant')}
             </button>
           </nav>
         </div>
@@ -86,11 +87,11 @@ export default function Header() {
           {/* Quick Search trigger */}
           <button 
             onClick={() => setIsSearchOpen(true)}
-            className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-outline-variant/15 text-on-surface-variant/80 hover:border-primary/40 transition-all text-xs shadow-sm hover:shadow"
-            title="Search location"
+            className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-outline-variant/15 text-on-surface-variant/80 hover:border-primary/40 transition-all text-xs shadow-sm hover:shadow cursor-pointer"
+            title={t('searchCityPlaceholder')}
           >
             <span className="material-symbols-outlined text-sm">search</span>
-            <span>Search city...</span>
+            <span>{t('searchCityPlaceholder')}</span>
           </button>
 
           {/* Location badge */}
@@ -100,7 +101,7 @@ export default function Header() {
             aria-label="Select Location"
           >
             <span className="material-symbols-outlined text-primary text-sm">location_on</span>
-            <span className="font-label-caps text-[11px] uppercase tracking-wider font-semibold">{currentCity.name}</span>
+            <span className="font-label-caps text-[11px] uppercase tracking-wider font-semibold">{currentCity?.name || t('selectLocation')}</span>
           </button>
 
           {/* Unit Toggle */}
@@ -117,7 +118,7 @@ export default function Header() {
             onClick={() => setIsLanguageOpen(true)}
             className="text-on-surface-variant/80 hover:text-primary transition-colors duration-200 cursor-pointer p-1.5 rounded-full hover:bg-surface-container active:scale-95"
             aria-label="Language options"
-            title="Language Selector"
+            title={t('languageSelectorTitle')}
           >
             <span className="material-symbols-outlined text-xl">language</span>
           </button>
@@ -127,24 +128,22 @@ export default function Header() {
             onClick={() => setIsSettingsOpen(true)}
             className="text-on-surface-variant/80 hover:text-primary transition-colors duration-200 cursor-pointer p-1.5 rounded-full hover:bg-surface-container active:scale-95"
             aria-label="Settings"
-            title="Accessibility & Settings"
+            title={t('settingsTitle')}
           >
             <span className="material-symbols-outlined text-xl">settings</span>
           </button>
 
-          {/* ============================================================= */}
-          {/* TITLE BAR AUTH CONTROLS                                       */}
-          {/* ============================================================= */}
+          {/* Title Bar Auth Controls */}
           {user ? (
             <div className="flex items-center gap-1.5 pl-2 border-l border-outline-variant/20">
               {/* History Button */}
               <button
                 onClick={() => setIsHistoryDrawerOpen(true)}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 transition-all text-xs font-semibold shadow-sm cursor-pointer"
-                title="View Assistant History"
+                title={t('history')}
               >
                 <span className="material-symbols-outlined text-sm">history</span>
-                <span className="hidden sm:inline">History</span>
+                <span className="hidden sm:inline">{t('history')}</span>
               </button>
 
               {/* User Avatar pill */}
@@ -164,10 +163,10 @@ export default function Header() {
               <button
                 onClick={() => {
                   logout();
-                  showToast('Logged out successfully');
+                  showToast(t('signOut'));
                 }}
                 className="text-on-surface-variant/70 hover:text-error transition-colors p-1.5 rounded-full hover:bg-surface-container cursor-pointer"
-                title="Sign Out"
+                title={t('signOut')}
               >
                 <span className="material-symbols-outlined text-lg">logout</span>
               </button>
@@ -177,10 +176,10 @@ export default function Header() {
               <button
                 onClick={() => openAuthModal('choice')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-on-primary hover:bg-primary/90 transition-all text-xs font-semibold shadow-sm cursor-pointer active:scale-95"
-                title="Sign in or create account to save assistant history"
+                title="Sign in or create account"
               >
                 <span className="material-symbols-outlined text-sm">account_circle</span>
-                <span>Sign In / Login</span>
+                <span>{t('signInLogin')}</span>
               </button>
             </div>
           )}
@@ -189,4 +188,3 @@ export default function Header() {
     </header>
   );
 }
-

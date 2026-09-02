@@ -1,64 +1,92 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { LANGUAGES, DEFAULT_CITIES } from '../constants/appConfig';
+import { LANGUAGES, POPULAR_CITIES, DEFAULT_CITIES } from '../constants/appConfig';
 import { fetchWeatherData, reverseGeocodeCoords } from '../services/weatherApi';
 import { queryWeatherAgent, synthesizeSpeech } from '../services/aiAgentService';
+import { getTranslation, getTranslatedCondition } from '../utils/translations';
 
 const WeatherContext = createContext();
 
 export function WeatherProvider({ children }) {
-  // Current active live city state
-  const [currentCity, setCurrentCity] = useState({
-    id: 'ranchi',
-    name: 'Ranchi',
-    region: 'Jharkhand',
-    country: 'India',
-    lat: 23.3441,
-    lon: 85.3096,
-    tempC: 24,
-    tempF: 75,
-    condition: 'Partly Cloudy',
-    conditionIcon: 'partly_cloudy_day',
-    feelsLikeC: 25,
-    feelsLikeF: 77,
-    humidity: 70,
-    windKm: 12,
-    windDirection: 'SE',
-    windDegrees: 135,
-    visibilityKm: 9.0,
-    uvIndex: 6,
-    uvLabel: 'Mod',
-    precipProbability: 20,
-    precipMm: 0.0,
-    pressureHpa: 1013,
-    pressureTrend: 'Steady ➔',
-    dewPointC: 18,
-    dewPointF: 64,
-    sunrise: '5:30 AM',
-    sunset: '6:10 PM',
-    lastUpdated: 'Live from Open-Meteo',
-    aiInsight: 'Atmospheric conditions for Ranchi: High pressure ridge maintaining stable temperature gradient.',
-    dayAtAGlance: [
-      { id: 'commute', category: 'Commute', icon: 'directions_car', status: 'Optimal Routes', badgeColor: 'bg-emerald-500/10 text-emerald-700', text: 'Clear arterial routes expected.' },
-      { id: 'outdoor', category: 'Outdoor Plans', icon: 'wb_sunny', status: 'Prime Window', badgeColor: 'bg-blue-500/10 text-blue-700', text: 'Good outdoor temperature comfort.' }
-    ],
-    alert: null,
-    hourly: [
-      { time: 'Now', icon: 'partly_cloudy_day', tempC: 24, tempF: 75, precip: 15, precipMm: 0, humidity: 70, windKm: 12, windDir: 'SE', dewC: 18, dewF: 64, condition: 'Partly Cloudy' },
-      { time: '1 PM', icon: 'cloud', tempC: 25, tempF: 77, precip: 20, precipMm: 0, humidity: 68, windKm: 14, windDir: 'SE', dewC: 18, dewF: 64, condition: 'Cloudy' },
-      { time: '2 PM', icon: 'partly_cloudy_day', tempC: 26, tempF: 79, precip: 20, precipMm: 0, humidity: 65, windKm: 15, windDir: 'SSE', dewC: 19, dewF: 66, condition: 'Partly Cloudy' },
-      { time: '3 PM', icon: 'rainy', tempC: 24, tempF: 75, precip: 50, precipMm: 1.2, humidity: 75, windKm: 16, windDir: 'S', dewC: 19, dewF: 66, condition: 'Showers' }
-    ],
-    sevenDay: [
-      { day: 'Today', icon: 'partly_cloudy_day', highC: 26, highF: 79, lowC: 19, lowF: 66, precip: 20, humidity: 70, windKm: 12, uv: 6, summary: 'Partly cloudy with afternoon cloud buildup.' },
-      { day: 'Mon', icon: 'sunny', highC: 27, highF: 81, lowC: 20, lowF: 68, precip: 10, humidity: 65, windKm: 14, uv: 7, summary: 'Clear sunny intervals.' },
-      { day: 'Tue', icon: 'rainy', highC: 25, highF: 77, lowC: 18, lowF: 64, precip: 60, humidity: 78, windKm: 18, uv: 5, summary: 'Light rain showers.' }
-    ],
-    analytics: {
-      trend30d: { avgDelta: 'Live Climatology', labels: ['1st', '5th', '10th', '15th', '20th', '25th', '30th'], tempsC: [22, 23, 24, 25, 24, 25, 24], tempsF: [72, 73, 75, 77, 75, 77, 75], note: 'Real-time telemetry projection powered by Open-Meteo.' },
-      trend7d: { avgDelta: '7-Day Spread', labels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], tempsC: [24, 25, 26, 25, 24, 25, 26], tempsF: [75, 77, 79, 77, 75, 77, 79], note: 'Real-time telemetry projection powered by Open-Meteo.' },
-      trend1y: { avgDelta: 'Annual Mean', labels: ['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Nov'], tempsC: [18, 24, 32, 28, 24, 19], tempsF: [64, 75, 90, 82, 75, 66], note: 'Real-time telemetry projection powered by Open-Meteo.' }
-    },
-    radarFrames: []
+  // Current active live city state (initialized dynamically)
+  const [currentCity, setCurrentCity] = useState(() => {
+    try {
+      const saved = localStorage.getItem('weathergpt_last_city');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed.lat === 'number' && typeof parsed.lon === 'number') {
+          return {
+            ...parsed,
+            tempC: null,
+            tempF: null,
+            condition: 'Connecting to Live Satellites...',
+            conditionIcon: 'partly_cloudy_day',
+            feelsLikeC: null,
+            feelsLikeF: null,
+            humidity: null,
+            windKm: null,
+            windDirection: 'N',
+            windDegrees: 0,
+            visibilityKm: 10.0,
+            uvIndex: null,
+            uvLabel: 'Live',
+            precipProbability: 0,
+            precipMm: 0.0,
+            pressureHpa: 1013,
+            pressureTrend: 'Steady ➔',
+            dewPointC: null,
+            dewPointF: null,
+            sunrise: '--:--',
+            sunset: '--:--',
+            lastUpdated: 'Fetching live telemetry...',
+            aiInsight: `Connecting to atmospheric telemetry...`,
+            dayAtAGlance: [],
+            alert: null,
+            hourly: [],
+            sevenDay: [],
+            analytics: null,
+            radarFrames: []
+          };
+        }
+      }
+    } catch (e) {}
+
+    return {
+      id: 'awaiting-location',
+      name: 'Select Location',
+      region: '',
+      country: '',
+      lat: 28.6139,
+      lon: 77.2090,
+      tempC: null,
+      tempF: null,
+      condition: 'Choose Location or Enable GPS',
+      conditionIcon: 'partly_cloudy_day',
+      feelsLikeC: null,
+      feelsLikeF: null,
+      humidity: null,
+      windKm: null,
+      windDirection: 'N',
+      windDegrees: 0,
+      visibilityKm: 10.0,
+      uvIndex: null,
+      uvLabel: 'Awaiting Location',
+      precipProbability: 0,
+      precipMm: 0.0,
+      pressureHpa: 1013,
+      pressureTrend: 'Steady ➔',
+      dewPointC: null,
+      dewPointF: null,
+      sunrise: '--:--',
+      sunset: '--:--',
+      lastUpdated: 'Awaiting location...',
+      aiInsight: 'Please select a city or use your GPS location to load real-time atmospheric intelligence.',
+      dayAtAGlance: [],
+      alert: null,
+      hourly: [],
+      sevenDay: [],
+      analytics: null,
+      radarFrames: []
+    };
   });
 
   const [unit, setUnit] = useState('C'); // 'C' | 'F'
@@ -68,9 +96,9 @@ export function WeatherProvider({ children }) {
   const [savedCities, setSavedCities] = useState(() => {
     try {
       const saved = localStorage.getItem('weathergpt_saved_cities');
-      return saved ? JSON.parse(saved) : DEFAULT_CITIES;
+      return saved ? JSON.parse(saved) : POPULAR_CITIES;
     } catch {
-      return DEFAULT_CITIES;
+      return POPULAR_CITIES;
     }
   });
 
@@ -83,9 +111,29 @@ export function WeatherProvider({ children }) {
   const [activeAlert, setActiveAlert] = useState(null);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
 
-  // Accessibility & Preferences
-  const [currentLanguage, setCurrentLanguage] = useState(LANGUAGES[0]);
-  const [isHighContrast, setIsHighContrast] = useState(false);
+  // Accessibility & Preferences (Language is persisted in localStorage)
+  const [currentLanguage, setCurrentLanguageState] = useState(() => {
+    try {
+      const savedCode = localStorage.getItem('weathergpt_lang');
+      if (savedCode) {
+        const found = LANGUAGES.find(l => l.code === savedCode);
+        if (found) return found;
+      }
+    } catch {}
+    return LANGUAGES[0];
+  });
+
+  const setCurrentLanguage = (langObj) => {
+    setCurrentLanguageState(langObj);
+    try {
+      localStorage.setItem('weathergpt_lang', langObj.code);
+    } catch {}
+  };
+
+  // Translation helpers
+  const t = (key) => getTranslation(key, currentLanguage?.code);
+  const translateCondition = (cond) => getTranslatedCondition(cond, currentLanguage?.code);
+
   const [fontSizeMode, setFontSizeMode] = useState('standard');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [toastMessage, setToastMessage] = useState(null);
@@ -115,16 +163,28 @@ export function WeatherProvider({ children }) {
     }
   }, [savedCities]);
 
-  // Initial fetch on app load
+  // Initial location resolution on app load
   useEffect(() => {
-    loadLiveWeather({
-      lat: DEFAULT_CITIES[0].lat,
-      lon: DEFAULT_CITIES[0].lon,
-      name: DEFAULT_CITIES[0].name,
-      region: DEFAULT_CITIES[0].region,
-      country: DEFAULT_CITIES[0].country,
-      id: DEFAULT_CITIES[0].id
-    });
+    const savedLastCity = localStorage.getItem('weathergpt_last_city');
+    if (savedLastCity) {
+      try {
+        const parsed = JSON.parse(savedLastCity);
+        if (parsed && typeof parsed.lat === 'number' && typeof parsed.lon === 'number') {
+          loadLiveWeather(parsed);
+          return;
+        }
+      } catch (e) {
+        console.warn('Error parsing saved last city:', e);
+      }
+    }
+
+    // If no prior saved city, open the location picker modal so user can choose or allow GPS
+    setIsLocationOpen(true);
+
+    // Prompt GPS detection automatically
+    if (navigator.geolocation) {
+      detectCurrentLocation();
+    }
   }, []);
 
   /**
@@ -137,6 +197,19 @@ export function WeatherProvider({ children }) {
     try {
       const liveData = await fetchWeatherData({ lat, lon, name, region, country, id });
       setCurrentCity(liveData);
+
+      // Persist chosen city to localStorage
+      try {
+        localStorage.setItem('weathergpt_last_city', JSON.stringify({
+          id: id || `${name}-${lat}-${lon}`,
+          name,
+          region,
+          country,
+          lat,
+          lon
+        }));
+      } catch (e) {}
+
       showToast(`Live weather loaded for ${name}`);
     } catch (err) {
       console.error('Failed to load weather:', err);
@@ -524,8 +597,8 @@ export function WeatherProvider({ children }) {
         setIsVoiceOpen,
         currentLanguage,
         setCurrentLanguage,
-        isHighContrast,
-        setIsHighContrast,
+        t,
+        translateCondition,
         fontSizeMode,
         setFontSizeMode,
         notificationsEnabled,
@@ -544,7 +617,7 @@ export function WeatherProvider({ children }) {
       }}
 
     >
-      <div class={`min-h-screen ${isHighContrast ? 'high-contrast' : ''} ${fontSizeMode === 'large' ? 'text-lg' : ''}`}>
+      <div className={`min-h-screen ${fontSizeMode === 'large' ? 'text-lg' : ''}`}>
         {children}
       </div>
     </WeatherContext.Provider>

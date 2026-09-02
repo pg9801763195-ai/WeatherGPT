@@ -2,171 +2,202 @@ import React from 'react';
 import { useWeather } from '../context/WeatherContext';
 
 export default function WeatherMetrics() {
-  const { currentCity, formatTemp } = useWeather();
+  const { currentCity, formatTemp, t } = useWeather();
 
-  const humidity = currentCity?.humidity ?? 65;
-  const uvIndex = currentCity?.uvIndex ?? 0;
-  const uvLabel = currentCity?.uvLabel || (uvIndex === 0 ? 'Minimal' : (uvIndex >= 8 ? 'Very High' : uvIndex >= 6 ? 'High' : uvIndex >= 3 ? 'Mod' : 'Low'));
+  const isLive = Boolean(currentCity?.isLiveLoaded && currentCity?.humidity !== null);
 
+  const humidity = isLive ? currentCity.humidity : null;
+  const uvIndex = isLive ? currentCity.uvIndex : null;
+  const uvLabel = isLive 
+    ? (currentCity?.uvLabel || (uvIndex === 0 ? 'Minimal' : (uvIndex >= 8 ? 'Very High' : uvIndex >= 6 ? 'High' : uvIndex >= 3 ? 'Mod' : 'Low')))
+    : t('awaitingLocation');
 
-  const windKm = currentCity?.windKm ?? 10;
-  const windDirection = currentCity?.windDirection || 'N';
-  const windDegrees = currentCity?.windDegrees ?? 0;
-  const precipProbability = currentCity?.precipProbability ?? 0;
-  const precipMm = currentCity?.precipMm ?? 0.0;
-  const pressureHpa = currentCity?.pressureHpa ?? 1013;
-  const pressureTrend = currentCity?.pressureTrend || 'Steady ➔';
-  const visibilityKm = currentCity?.visibilityKm ?? 10.0;
-  const dewPointC = currentCity?.dewPointC ?? 18;
-  const dewPointF = currentCity?.dewPointF ?? 64;
+  const windKm = isLive ? currentCity.windKm : null;
+  const windDirection = isLive ? (currentCity.windDirection || 'N') : '--';
+  const windDegrees = isLive ? (currentCity.windDegrees ?? 0) : 0;
+  const precipProbability = isLive ? currentCity.precipProbability : null;
+  const precipMm = isLive ? currentCity.precipMm : null;
+  const pressureHpa = isLive ? currentCity.pressureHpa : null;
+  const pressureTrend = isLive ? (currentCity.pressureTrend || 'Steady ➔') : t('pendingSelection');
+  const visibilityKm = isLive ? currentCity.visibilityKm : null;
+  const dewPointC = isLive ? currentCity.dewPointC : null;
+  const dewPointF = isLive ? currentCity.dewPointF : null;
 
   return (
-    <section class="space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider font-semibold">
-          Atmospheric Conditions &amp; Gauges
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider font-semibold">
+          {t('atmosphericGauges')}
         </h2>
-        <span class="text-[11px] text-on-surface-variant/75 font-medium">Live Metrics</span>
+        <span className="text-[11px] text-on-surface-variant/75 font-medium">
+          {isLive ? t('liveMetrics') : t('pendingSelection')}
+        </span>
       </div>
 
       {/* 2-Column Spacious Grid */}
-      <div class="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {/* Humidity Card */}
-        <div class="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm group">
-          <div class="flex justify-between items-center pb-2 border-b border-outline-variant/10">
-            <span class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">Humidity</span>
-            <span class="material-symbols-outlined text-primary text-base">humidity_percentage</span>
+        <div className="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm group">
+          <div className="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+            <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">{t('humidity')}</span>
+            <span className="material-symbols-outlined text-primary text-base">humidity_percentage</span>
           </div>
 
-          <div class="my-3 flex items-center gap-3.5">
-            <div class="relative w-12 h-12 flex-shrink-0 flex items-center justify-center">
-              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+          <div className="my-3 flex items-center gap-3.5">
+            <div className="relative w-12 h-12 flex-shrink-0 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                 <path
-                  class="text-outline-variant/15 stroke-current"
+                  className="text-outline-variant/15 stroke-current"
                   strokeWidth="3.5"
                   fill="none"
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                 />
                 <path
-                  class="text-primary stroke-current transition-all duration-700"
-                  strokeDasharray={`${humidity}, 100`}
+                  className="text-primary stroke-current transition-all duration-700"
+                  strokeDasharray={`${humidity ?? 0}, 100`}
                   strokeWidth="3.5"
                   strokeLinecap="round"
                   fill="none"
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                 />
               </svg>
-              <span class="absolute text-[10px] font-bold text-on-surface">{humidity}%</span>
+              <span className="absolute text-[10px] font-bold text-on-surface">
+                {humidity !== null ? `${humidity}%` : '--'}
+              </span>
             </div>
             <div>
-              <span class="text-xl font-bold text-on-surface block leading-none mb-1">{humidity}%</span>
-              <span class="text-[11px] text-on-surface-variant/80 font-medium block">
-                {humidity > 75 ? 'Humid Air' : humidity > 60 ? 'Moderate' : 'Comfort'}
+              <span className="text-xl font-bold text-on-surface block leading-none mb-1">
+                {humidity !== null ? `${humidity}%` : '--'}
+              </span>
+              <span className="text-[11px] text-on-surface-variant/80 font-medium block">
+                {humidity !== null ? (humidity > 75 ? t('humidAir') : humidity > 60 ? t('moderate') : t('comfort')) : t('selectLocation')}
               </span>
             </div>
           </div>
         </div>
 
         {/* UV Index Card */}
-        <div class="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
-          <div class="flex justify-between items-center pb-2 border-b border-outline-variant/10">
-            <span class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">UV Index</span>
-            <span class="material-symbols-outlined text-amber-500 text-base">routine</span>
+        <div className="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
+          <div className="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+            <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">{t('uvIndex')}</span>
+            <span className="material-symbols-outlined text-amber-500 text-base">routine</span>
           </div>
 
-          <div class="my-3 space-y-2">
-            <div class="flex items-baseline gap-2">
-              <span class="text-2xl font-bold text-on-surface leading-none">{uvIndex}</span>
-              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 font-label-caps">
+          <div className="my-3 space-y-2">
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-on-surface leading-none">
+                {uvIndex !== null ? uvIndex : '--'}
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 font-label-caps">
                 {uvLabel}
               </span>
             </div>
-            <div class="w-full bg-outline-variant/15 h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-outline-variant/15 h-1.5 rounded-full overflow-hidden">
               <div
-                class="h-full bg-gradient-to-r from-emerald-400 via-amber-400 to-red-500 rounded-full"
-                style={{ width: `${Math.min((uvIndex / 12) * 100, 100)}%` }}
+                className="h-full bg-gradient-to-r from-emerald-400 via-amber-400 to-red-500 rounded-full"
+                style={{ width: `${uvIndex !== null ? Math.min((uvIndex / 12) * 100, 100) : 0}%` }}
               ></div>
             </div>
           </div>
         </div>
 
         {/* Wind Direction Compass */}
-        <div class="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
-          <div class="flex justify-between items-center pb-2 border-b border-outline-variant/10">
-            <span class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">Wind Vector</span>
-            <span class="material-symbols-outlined text-primary text-base">air</span>
+        <div className="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
+          <div className="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+            <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">{t('windVector')}</span>
+            <span className="material-symbols-outlined text-primary text-base">air</span>
           </div>
 
-          <div class="my-3 flex items-center gap-3">
-            <div class="w-9 h-9 rounded-full bg-secondary-container/50 flex-shrink-0 flex items-center justify-center border border-outline-variant/15">
+          <div className="my-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-secondary-container/40 flex items-center justify-center border border-primary/20 flex-shrink-0">
               <span
-                class="material-symbols-outlined text-primary text-lg transition-transform duration-500"
+                className="material-symbols-outlined text-primary text-lg transition-transform duration-500"
                 style={{ transform: `rotate(${windDegrees}deg)` }}
               >
                 navigation
               </span>
             </div>
             <div>
-              <span class="text-xl font-bold text-on-surface leading-none block mb-1">{windKm} <span class="text-xs font-normal text-on-surface-variant">km/h</span></span>
-              <span class="text-[11px] text-on-surface-variant/80 font-medium block">From {windDirection} ({windDegrees}°)</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-bold text-on-surface leading-none">
+                  {windKm !== null ? windKm : '--'}
+                </span>
+                <span className="text-xs text-on-surface-variant/75 font-medium">km/h</span>
+              </div>
+              <span className="text-[11px] text-on-surface-variant/80 font-medium block mt-0.5">
+                {isLive ? `${windDirection} (${windDegrees}°)` : t('pendingSelection')}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Precipitation Meter */}
-        <div class="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
-          <div class="flex justify-between items-center pb-2 border-b border-outline-variant/10">
-            <span class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">Precipitation</span>
-            <span class="material-symbols-outlined text-primary text-base">water_drop</span>
+        {/* Precipitation Card */}
+        <div className="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
+          <div className="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+            <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">{t('precipitation')}</span>
+            <span className="material-symbols-outlined text-blue-500 text-base">water_drop</span>
           </div>
 
-          <div class="my-3 space-y-2">
-            <div class="flex items-baseline justify-between">
-              <span class="text-2xl font-bold text-on-surface leading-none">{precipProbability}%</span>
-              <span class="text-[11px] text-on-surface-variant/80 font-medium">{precipMm} mm/h</span>
+          <div className="my-3">
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-bold text-on-surface leading-none">
+                {precipProbability !== null ? `${precipProbability}%` : '--'}
+              </span>
             </div>
-            <div class="w-full bg-outline-variant/15 h-1.5 rounded-full overflow-hidden">
-              <div
-                class="h-full bg-primary rounded-full transition-all duration-500"
-                style={{ width: `${precipProbability}%` }}
-              ></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Air Pressure Barometer */}
-        <div class="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
-          <div class="flex justify-between items-center pb-2 border-b border-outline-variant/10">
-            <span class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">Barometer</span>
-            <span class="material-symbols-outlined text-on-surface-variant text-base">compress</span>
-          </div>
-
-          <div class="my-3">
-            <span class="text-xl font-bold text-on-surface leading-none block mb-1">{pressureHpa} <span class="text-xs font-normal text-on-surface-variant">hPa</span></span>
-            <span class="text-[11px] text-primary font-medium block">
-              Trend: {pressureTrend}
+            <span className="text-[11px] text-on-surface-variant/80 font-medium block mt-1">
+              {precipMm !== null ? `${precipMm} mm/h` : t('pendingSelection')}
             </span>
           </div>
         </div>
 
-        {/* Visibility & Dew Point */}
-        <div class="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
-          <div class="flex justify-between items-center pb-2 border-b border-outline-variant/10">
-            <span class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">Visibility</span>
-            <span class="material-symbols-outlined text-on-surface-variant text-base">visibility</span>
+        {/* Barometer Pressure Card */}
+        <div className="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
+          <div className="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+            <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">{t('barometer')}</span>
+            <span className="material-symbols-outlined text-primary text-base">swap_vertical_circle</span>
           </div>
 
-          <div class="my-3 flex items-end justify-between">
-            <div>
-              <span class="text-xl font-bold text-on-surface leading-none block mb-1">{visibilityKm} <span class="text-xs font-normal text-on-surface-variant">km</span></span>
-              <span class="text-[10px] text-emerald-700 font-medium block">Clear Horizon</span>
+          <div className="my-3">
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-bold text-on-surface leading-none">
+                {pressureHpa !== null ? pressureHpa : '--'}
+              </span>
+              <span className="text-xs text-on-surface-variant/75 font-medium">hPa</span>
             </div>
-            <div class="text-right">
-              <span class="text-[9px] text-on-surface-variant uppercase font-label-caps block">Dew Point</span>
-              <span class="text-xs font-bold text-on-surface">
-                {formatTemp(dewPointC, dewPointF)}
+            <span className="text-[11px] text-on-surface-variant/80 font-medium block mt-1">
+              {isLive ? pressureTrend : t('pendingSelection')}
+            </span>
+          </div>
+        </div>
+
+        {/* Visibility Card */}
+        <div className="bg-surface border border-outline-variant/15 rounded-2xl p-5 flex flex-col justify-between hover:border-primary/30 transition-all shadow-sm">
+          <div className="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+            <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">{t('visibility')}</span>
+            <span className="material-symbols-outlined text-primary text-base">visibility</span>
+          </div>
+
+          <div className="my-3 flex justify-between items-end">
+            <div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-bold text-on-surface leading-none">
+                  {visibilityKm !== null ? visibilityKm : '--'}
+                </span>
+                <span className="text-xs text-on-surface-variant/75 font-medium">km</span>
+              </div>
+              <span className="text-[11px] text-emerald-600 font-medium block mt-1">
+                {isLive ? (visibilityKm >= 10 ? t('clearHorizon') : t('hazyLow')) : t('pendingSelection')}
               </span>
             </div>
+
+            {dewPointC !== null && (
+              <div className="text-right">
+                <span className="text-[9px] text-on-surface-variant uppercase tracking-wider font-semibold font-label-caps block">{t('dewPoint')}</span>
+                <span className="text-xs font-bold text-on-surface font-mono">
+                  {formatTemp(dewPointC, dewPointF)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
