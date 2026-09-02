@@ -77,7 +77,10 @@ WeatherGPT Team
                 "Authorization": f"Bearer {config.resend_api_key}",
                 "Content-Type": "application/json"
             }
-            from_sender = config.smtp_from if ("@" in config.smtp_from and not config.smtp_from.startswith("WeatherGPT <noreply")) else "WeatherGPT <onboarding@resend.dev>"
+            # Resend requires either a verified custom domain or their official onboarding sender
+            from_sender = "WeatherGPT <onboarding@resend.dev>"
+            if config.smtp_from and not any(d in config.smtp_from.lower() for d in ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "noreply@weathergpt.ai"]):
+                from_sender = config.smtp_from
             payload = {
                 "from": from_sender,
                 "to": [recipient_email],
