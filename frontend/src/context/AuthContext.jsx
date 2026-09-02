@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import {
   loginApi,
   logoutApi,
+  directRegisterApi,
+  googleLoginApi,
   requestOtpApi,
   verifyOtpApi,
   setPasswordApi,
@@ -84,6 +86,42 @@ export function AuthProvider({ children }) {
   const closeAuthModal = () => {
     setIsAuthModalOpen(false);
     setAuthModalView('choice');
+  };
+
+  /**
+   * Direct 1-Click Registration (Email + Password + Name, No OTP)
+   */
+  const register = async ({ name, email, password }) => {
+    const res = await directRegisterApi({ name, email, password });
+    if (res && res.token && res.user) {
+      setToken(res.token);
+      setUser(res.user);
+      try {
+        localStorage.setItem(TOKEN_STORAGE_KEY, res.token);
+      } catch {}
+      closeAuthModal();
+      loadHistory(res.token);
+      return res.user;
+    }
+    return null;
+  };
+
+  /**
+   * Google OAuth Login & Registration
+   */
+  const loginWithGoogle = async (googleData) => {
+    const res = await googleLoginApi(googleData);
+    if (res && res.token && res.user) {
+      setToken(res.token);
+      setUser(res.user);
+      try {
+        localStorage.setItem(TOKEN_STORAGE_KEY, res.token);
+      } catch {}
+      closeAuthModal();
+      loadHistory(res.token);
+      return res.user;
+    }
+    return null;
   };
 
   /**
@@ -222,6 +260,8 @@ export function AuthProvider({ children }) {
         requestOtp,
         verifyOtp,
         setPasswordAndRegister,
+        register,
+        loginWithGoogle,
         login,
         logout,
         conversations,

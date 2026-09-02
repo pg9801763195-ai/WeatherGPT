@@ -162,6 +162,45 @@ class MongoDatabaseManager:
             {"$set": {"last_login_at": now_iso, "updated_at": now_iso}}
         )
 
+    def create_or_update_google_user(
+        self,
+        email: str,
+        name: Optional[str] = None,
+        picture: Optional[str] = None,
+        google_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Creates or updates a user authenticated via Google OAuth."""
+        norm_email = email.strip().lower()
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        existing = self.find_user_by_email(norm_email)
+        if existing:
+            update_fields = {"last_login_at": now_iso, "updated_at": now_iso}
+            if picture and not existing.get("picture"):
+                update_fields["picture"] = picture
+            if google_id:
+                update_fields["google_id"] = google_id
+            self.db.users.update_one({"_id": existing["_id"]}, {"$set": update_fields})
+            existing.update(update_fields)
+            return existing
+
+        user_id = str(uuid.uuid4())
+        user_doc = {
+            "_id": user_id,
+            "email": norm_email,
+            "password_hash": None,
+            "provider": "google",
+            "google_id": google_id,
+            "email_verified": True,
+            "name": name or norm_email.split("@")[0],
+            "picture": picture,
+            "role": "user",
+            "created_at": now_iso,
+            "updated_at": now_iso,
+            "last_login_at": now_iso
+        }
+        self.db.users.insert_one(user_doc)
+        return user_doc
+
     # =========================================================================
     # OTP Verification
     # =========================================================================

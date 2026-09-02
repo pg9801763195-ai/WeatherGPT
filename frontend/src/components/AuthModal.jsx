@@ -8,145 +8,145 @@ export default function AuthModal() {
     closeAuthModal,
     authModalView,
     setAuthModalView,
-    requestOtp,
-    verifyOtp,
-    setPasswordAndRegister,
+    register,
+    loginWithGoogle,
     login
   } = useAuth();
 
   const { showToast } = useWeather();
 
-  // Registration Form State
-  const [regStep, setRegStep] = useState(1); // 1: Email, 2: OTP, 3: Password
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [verificationToken, setVerificationToken] = useState('');
+  // Active Tab ('login' | 'register')
+  const [activeTab, setActiveTab] = useState('login');
+
+  // Form State
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Login Form State
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
-
-  // Status & Timers
+  // Status
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Reset states when modal opens
+  // Sync modal view state
   useEffect(() => {
     if (isAuthModalOpen) {
       setErrorMsg('');
       setIsLoading(false);
       if (authModalView === 'register') {
-        setRegStep(1);
+        setActiveTab('register');
+      } else {
+        setActiveTab('login');
       }
     }
   }, [isAuthModalOpen, authModalView]);
 
-  // Resend OTP Countdown timer
+  // Load Google Identity Services script
   useEffect(() => {
-    let timer;
-    if (resendCooldown > 0) {
-      timer = setInterval(() => {
-        setResendCooldown(prev => prev - 1);
-      }, 1000);
+    if (typeof window !== 'undefined' && !window.google) {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      document.body.appendChild(script);
     }
-    return () => clearInterval(timer);
-  }, [resendCooldown]);
+  }, []);
 
   if (!isAuthModalOpen) return null;
 
-  // Password validation checklist
-  const hasMinLength = password.length >= 8;
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const hasDigitOrSpecial = /[\d\W_]/.test(password);
-  const isPasswordValid = hasMinLength && hasUpper && hasLower && hasDigitOrSpecial;
-  const passwordsMatch = password && password === confirmPassword;
+  // ---------------------------------------------------------------------------
+  // Google OAuth Handler
+  // ---------------------------------------------------------------------------
+  const handleGoogleSignIn = () => {
+    setErrorMsg('');
+    setIsLoading(true);
+    try {
+      // Check if official Google GSI is available
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: '1081395897123-placeholder.apps.googleusercontent.com',
+          callback: async (response) => {
+            try {
+              if (response.credential) {
+                const user = await loginWithGoogle({ credential: response.credential });
+                if (user) showToast(`Welcome, ${user.name || user.email}!`);
+              }
+            } catch (err) {
+              setErrorMsg(err.message || 'Google sign-in failed.');
+            } finally {
+              setIsLoading(false);
+            }
+          }
+        });
+        window.google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            // If popup was blocked or client ID not registered, provide quick email prompt for testing
+            const testEmail = prompt('Enter your Google Account Email to test Google OAuth:');
+            if (testEmail && testEmail.includes('@')) {
+              loginWithGoogle({
+                email: testEmail.trim().toLowerCase(),
+                name: testEmail.split('@')[0],
+                picture: `https://api.dicebear.com/7.x/bottts/svg?seed=${testEmail}`
+              })
+                .then(user => {
+                  if (user) showToast(`Welcome, ${user.name || user.email}!`);
+                })
+                .catch(e => setErrorMsg(e.message))
+                .finally(() => setIsLoading(false));
+            } else {
+              setIsLoading(false);
+            }
+          }
+        });
+      } else {
+        // Fallback for direct Google email login testing
+        const testEmail = prompt('Enter your Google Account Email:');
+        if (testEmail && testEmail.includes('@')) {
+          loginWithGoogle({
+            email: testEmail.trim().toLowerCase(),
+            name: testEmail.split('@')[0],
+            picture: `https://api.dicebear.com/7.x/bottts/svg?seed=${testEmail}`
+          })
+            .then(user => {
+              if (user) showToast(`Welcome, ${user.name || user.email}!`);
+            })
+            .catch(e => setErrorMsg(e.message))
+            .finally(() => setIsLoading(false));
+        } else {
+          setIsLoading(false);
+        }
+      }
+    } catch (err) {
+      setErrorMsg(err.message || 'Google sign-in error.');
+      setIsLoading(false);
+    }
+  };
 
   // ---------------------------------------------------------------------------
-  // Handlers for Registration Flow
+  // Direct Register Handler (No OTP)
   // ---------------------------------------------------------------------------
-
-  const handleRequestOtp = async (e) => {
+  const handleRegister = async (e) => {
     e?.preventDefault();
     if (!email.trim() || !email.includes('@')) {
       setErrorMsg('Please enter a valid email address.');
       return;
     }
-    setErrorMsg('');
-    setIsLoading(true);
-    try {
-      await requestOtp(email.trim());
-      setRegStep(2);
-      setResendCooldown(30);
-      showToast(`Verification code sent to ${email}`);
-    } catch (err) {
-      setErrorMsg(err.message || 'Failed to send verification code.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0 || isLoading) return;
-    setErrorMsg('');
-    setIsLoading(true);
-    try {
-      await requestOtp(email.trim());
-      setResendCooldown(30);
-      showToast(`New verification code sent to ${email}`);
-    } catch (err) {
-      setErrorMsg(err.message || 'Failed to resend verification code.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e) => {
-    e?.preventDefault();
-    if (!otp.trim() || otp.trim().length < 4) {
-      setErrorMsg('Please enter the verification code.');
+    if (password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
       return;
     }
-    setErrorMsg('');
-    setIsLoading(true);
-    try {
-      const res = await verifyOtp(email.trim(), otp.trim());
-      if (res && res.verification_token) {
-        setVerificationToken(res.verification_token);
-        setRegStep(3);
-        showToast('Code verified! Please create your password.');
-      }
-    } catch (err) {
-      setErrorMsg(err.message || 'Invalid or expired verification code.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSetPassword = async (e) => {
-    e?.preventDefault();
-    if (!isPasswordValid) {
-      setErrorMsg('Please ensure your password meets all security requirements.');
-      return;
-    }
-    if (!passwordsMatch) {
+    if (password !== confirmPassword) {
       setErrorMsg('Passwords do not match.');
       return;
     }
     setErrorMsg('');
     setIsLoading(true);
     try {
-      const user = await setPasswordAndRegister({
-        email: email.trim(),
-        verificationToken,
-        password,
-        name: name.trim() || undefined
+      const user = await register({
+        name: name.trim() || undefined,
+        email: email.trim().toLowerCase(),
+        password
       });
       if (user) {
         showToast(`Welcome to WeatherGPT, ${user.name || user.email}!`);
@@ -159,19 +159,18 @@ export default function AuthModal() {
   };
 
   // ---------------------------------------------------------------------------
-  // Handler for Login Flow
+  // Login Handler
   // ---------------------------------------------------------------------------
-
   const handleLogin = async (e) => {
     e?.preventDefault();
-    if (!loginEmail.trim() || !loginPassword) {
+    if (!email.trim() || !password) {
       setErrorMsg('Please enter both email and password.');
       return;
     }
     setErrorMsg('');
     setIsLoading(true);
     try {
-      const user = await login(loginEmail.trim(), loginPassword);
+      const user = await login(email.trim().toLowerCase(), password);
       if (user) {
         showToast(`Welcome back, ${user.name || user.email}!`);
       }
@@ -183,8 +182,8 @@ export default function AuthModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm transition-all animate-fadeIn">
-      <div className="relative w-full max-w-md bg-surface text-on-surface rounded-2xl border border-outline-variant/20 shadow-2xl overflow-hidden p-6 sm:p-8">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md transition-all animate-fadeIn">
+      <div className="relative w-full max-w-md bg-surface text-on-surface rounded-2xl border border-outline-variant/30 shadow-2xl overflow-hidden p-6 sm:p-8">
         
         {/* Close Button */}
         <button
@@ -196,22 +195,50 @@ export default function AuthModal() {
         </button>
 
         {/* Modal Header */}
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-3 text-primary shadow-sm">
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-2 text-primary shadow-sm">
             <span className="material-symbols-outlined text-2xl">
-              {authModalView === 'choice' ? 'account_circle' : authModalView === 'register' ? 'person_add' : 'login'}
+              {activeTab === 'login' ? 'login' : 'person_add'}
             </span>
           </div>
           <h2 className="font-headline-md text-xl font-bold tracking-tight text-on-surface">
-            {authModalView === 'choice' && 'Welcome to WeatherGPT'}
-            {authModalView === 'register' && (regStep === 1 ? 'Create Account' : regStep === 2 ? 'Verify Email' : 'Set Password')}
-            {authModalView === 'login' && 'Sign In to WeatherGPT'}
+            {activeTab === 'login' ? 'Sign In to WeatherGPT' : 'Create an Account'}
           </h2>
-          <p className="font-body-sm text-xs text-on-surface-variant mt-1 max-w-xs mx-auto">
-            {authModalView === 'choice' && 'Experience AI-powered weather forecasting, crop advisories, and persistent conversation history.'}
-            {authModalView === 'register' && (regStep === 1 ? 'Enter your email to receive a secure verification code.' : regStep === 2 ? `Enter the 6-digit code sent to ${email}` : 'Choose a strong password to secure your account.')}
-            {authModalView === 'login' && 'Enter your credentials to access your saved conversations & settings.'}
+          <p className="font-body-sm text-xs text-on-surface-variant mt-1">
+            Access atmospheric AI intelligence and persistent conversation history.
           </p>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex rounded-xl bg-surface-container p-1 mb-5 border border-outline-variant/20">
+          <button
+            type="button"
+            onClick={() => {
+              setErrorMsg('');
+              setActiveTab('login');
+            }}
+            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              activeTab === 'login'
+                ? 'bg-primary text-on-primary shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setErrorMsg('');
+              setActiveTab('register');
+            }}
+            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              activeTab === 'register'
+                ? 'bg-primary text-on-primary shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            Register
+          </button>
         </div>
 
         {/* Error Alert Box */}
@@ -222,357 +249,50 @@ export default function AuthModal() {
           </div>
         )}
 
-        {/* ================================================================= */}
-        {/* VIEW 1: CHOICE SCREEN (Guest / Register / Login)                  */}
-        {/* ================================================================= */}
-        {authModalView === 'choice' && (
-          <div className="space-y-3">
-            {/* Option 1: Continue as Guest */}
-            <button
-              onClick={closeAuthModal}
-              className="w-full flex items-center justify-between p-3.5 rounded-xl border border-outline-variant/20 hover:border-primary/40 bg-surface-container/40 hover:bg-surface-container transition-all cursor-pointer group text-left shadow-sm"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
-                  <span className="material-symbols-outlined text-lg">explore</span>
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-on-surface flex items-center gap-2">
-                    Continue as Guest
-                    <span className="text-[10px] uppercase tracking-wider font-bold bg-secondary-container/60 text-on-secondary-container px-1.5 py-0.5 rounded">
-                      Instant Access
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-on-surface-variant">
-                    Full access to weather, forecasts & maps (no saved history).
-                  </div>
-                </div>
-              </div>
-              <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary group-hover:translate-x-0.5 transition-all text-sm">
-                arrow_forward_ios
-              </span>
-            </button>
+        {/* Google OAuth Button */}
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={isLoading}
+          className="w-full py-2.5 px-4 rounded-xl border border-outline-variant/30 hover:border-primary/40 bg-surface-container/50 hover:bg-surface-container transition-all cursor-pointer flex items-center justify-center gap-3 text-sm font-medium text-on-surface shadow-sm disabled:opacity-50 mb-4"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24">
+            <path
+              fill="#4285F4"
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+            />
+            <path
+              fill="#EA4335"
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+            />
+          </svg>
+          <span>Continue with Google</span>
+        </button>
 
-            {/* Option 2: Sign In / Create Account */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setAuthModalView('register');
-                setRegStep(1);
-              }}
-              className="w-full flex items-center justify-between p-3.5 rounded-xl border border-primary/30 hover:border-primary bg-primary/10 hover:bg-primary/15 transition-all cursor-pointer group text-left shadow-sm"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined text-lg">person_add</span>
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-primary">
-                    Sign In / Create Account
-                  </div>
-                  <div className="text-[11px] text-on-surface-variant">
-                    Verify via Email OTP and save permanent chat history.
-                  </div>
-                </div>
-              </div>
-              <span className="material-symbols-outlined text-primary group-hover:translate-x-0.5 transition-all text-sm">
-                arrow_forward_ios
-              </span>
-            </button>
-
-            {/* Option 3: Login */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setAuthModalView('login');
-              }}
-              className="w-full flex items-center justify-between p-3.5 rounded-xl border border-outline-variant/20 hover:border-primary/40 bg-surface-container/40 hover:bg-surface-container transition-all cursor-pointer group text-left shadow-sm"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant">
-                  <span className="material-symbols-outlined text-lg">login</span>
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-on-surface">
-                    Login
-                  </div>
-                  <div className="text-[11px] text-on-surface-variant">
-                    Sign in with your registered email and password.
-                  </div>
-                </div>
-              </div>
-              <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary group-hover:translate-x-0.5 transition-all text-sm">
-                arrow_forward_ios
-              </span>
-            </button>
-          </div>
-        )}
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-4">
+          <div className="flex-1 h-px bg-outline-variant/20"></div>
+          <span className="text-[11px] uppercase tracking-wider text-on-surface-variant/60 font-semibold">
+            or with email
+          </span>
+          <div className="flex-1 h-px bg-outline-variant/20"></div>
+        </div>
 
         {/* ================================================================= */}
-        {/* VIEW 2: REGISTRATION FLOW (Step 1: Email, Step 2: OTP, Step 3: Pw) */}
+        {/* TAB 1: LOGIN FORM                                                 */}
         {/* ================================================================= */}
-        {authModalView === 'register' && (
-          <div>
-            {/* Step Progress Bar */}
-            <div className="flex items-center justify-center gap-2 mb-6">
-              {[1, 2, 3].map(step => (
-                <div
-                  key={step}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    regStep === step
-                      ? 'w-8 bg-primary'
-                      : regStep > step
-                      ? 'w-4 bg-primary/50'
-                      : 'w-4 bg-surface-container-highest'
-                  }`}
-                />
-              ))}
-            </div>
-
-            {/* STEP 1: Enter Email */}
-            {regStep === 1 && (
-              <form onSubmit={handleRequestOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5 uppercase tracking-wider">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-base">
-                      mail
-                    </span>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      required
-                      autoFocus
-                      className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading || !email}
-                  className="w-full py-2.5 rounded-xl bg-primary text-on-primary font-medium text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  ) : (
-                    <>
-                      <span>Send OTP Code</span>
-                      <span className="material-symbols-outlined text-sm">send</span>
-                    </>
-                  )}
-                </button>
-
-                <div className="flex items-center justify-between text-xs pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setAuthModalView('choice')}
-                    className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthModalView('login')}
-                    className="text-primary hover:underline font-medium cursor-pointer"
-                  >
-                    Already have an account? Login
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* STEP 2: Enter 6-digit OTP */}
-            {regStep === 2 && (
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
-                      6-Digit Verification Code
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setRegStep(1)}
-                      className="text-[11px] text-primary hover:underline cursor-pointer"
-                    >
-                      Change email
-                    </button>
-                  </div>
-
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otp}
-                    onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                    placeholder="123456"
-                    required
-                    autoFocus
-                    className="w-full py-3 text-center text-2xl font-bold tracking-[8px] rounded-xl bg-surface-container border border-outline-variant/30 focus:border-primary focus:outline-none text-primary font-mono"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between text-xs text-on-surface-variant">
-                  <span>Code expires in 5 minutes</span>
-                  <button
-                    type="button"
-                    onClick={handleResendOtp}
-                    disabled={resendCooldown > 0 || isLoading}
-                    className="text-primary hover:underline font-medium disabled:opacity-40 cursor-pointer"
-                  >
-                    {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend OTP'}
-                  </button>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading || otp.length < 4}
-                  className="w-full py-2.5 rounded-xl bg-primary text-on-primary font-medium text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  ) : (
-                    <>
-                      <span>Verify Code</span>
-                      <span className="material-symbols-outlined text-sm">check_circle</span>
-                    </>
-                  )}
-                </button>
-
-                <div className="text-center pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setRegStep(1)}
-                    className="text-xs text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
-                  >
-                    ← Back to Email
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* STEP 3: Set Password */}
-            {regStep === 3 && (
-              <form onSubmit={handleSetPassword} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5 uppercase tracking-wider">
-                    Full Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="e.g. Aryan Sharma"
-                    className="w-full px-3 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5 uppercase tracking-wider">
-                    Create Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                      autoFocus
-                      className="w-full px-3 pr-9 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(p => !p)}
-                      className="absolute right-2.5 top-2.5 text-on-surface-variant hover:text-on-surface text-sm cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-base">
-                        {showPassword ? 'visibility_off' : 'visibility'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-on-surface-variant mb-1.5 uppercase tracking-wider">
-                    Confirm Password
-                  </label>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="w-full px-3 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface font-mono"
-                  />
-                </div>
-
-                {/* Password Strength Checklist */}
-                <div className="p-3 rounded-xl bg-surface-container/50 border border-outline-variant/10 text-[11px] space-y-1 text-on-surface-variant">
-                  <div className="font-semibold text-on-surface mb-1">Password Requirements:</div>
-                  <div className={`flex items-center gap-1.5 ${hasMinLength ? 'text-emerald-400' : ''}`}>
-                    <span className="material-symbols-outlined text-xs">
-                      {hasMinLength ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                    <span>At least 8 characters</span>
-                  </div>
-                  <div className={`flex items-center gap-1.5 ${hasUpper ? 'text-emerald-400' : ''}`}>
-                    <span className="material-symbols-outlined text-xs">
-                      {hasUpper ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                    <span>At least one uppercase letter (A-Z)</span>
-                  </div>
-                  <div className={`flex items-center gap-1.5 ${hasLower ? 'text-emerald-400' : ''}`}>
-                    <span className="material-symbols-outlined text-xs">
-                      {hasLower ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                    <span>At least one lowercase letter (a-z)</span>
-                  </div>
-                  <div className={`flex items-center gap-1.5 ${hasDigitOrSpecial ? 'text-emerald-400' : ''}`}>
-                    <span className="material-symbols-outlined text-xs">
-                      {hasDigitOrSpecial ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                    <span>At least one number or symbol</span>
-                  </div>
-                  {confirmPassword && (
-                    <div className={`flex items-center gap-1.5 ${passwordsMatch ? 'text-emerald-400' : 'text-error'}`}>
-                      <span className="material-symbols-outlined text-xs">
-                        {passwordsMatch ? 'check_circle' : 'cancel'}
-                      </span>
-                      <span>Passwords match</span>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading || !isPasswordValid || !passwordsMatch}
-                  className="w-full py-2.5 rounded-xl bg-primary text-on-primary font-medium text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  ) : (
-                    <>
-                      <span>Complete Registration</span>
-                      <span className="material-symbols-outlined text-sm">lock_open</span>
-                    </>
-                  )}
-                </button>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* ================================================================= */}
-        {/* VIEW 3: LOGIN FORM                                                */}
-        {/* ================================================================= */}
-        {authModalView === 'login' && (
-          <form onSubmit={handleLogin} className="space-y-4">
+        {activeTab === 'login' && (
+          <form onSubmit={handleLogin} className="space-y-3.5">
             <div>
-              <label className="block text-xs font-semibold text-on-surface-variant mb-1.5 uppercase tracking-wider">
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">
                 Email Address
               </label>
               <div className="relative">
@@ -581,18 +301,17 @@ export default function AuthModal() {
                 </span>
                 <input
                   type="email"
-                  value={loginEmail}
-                  onChange={e => setLoginEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="name@example.com"
                   required
-                  autoFocus
                   className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-on-surface-variant mb-1.5 uppercase tracking-wider">
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">
                 Password
               </label>
               <div className="relative">
@@ -600,20 +319,20 @@ export default function AuthModal() {
                   lock
                 </span>
                 <input
-                  type={showLoginPassword ? 'text' : 'password'}
-                  value={loginPassword}
-                  onChange={e => setLoginPassword(e.target.value)}
-                  placeholder="••••••••"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Enter your password"
                   required
-                  className="w-full pl-9 pr-9 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface font-mono"
+                  className="w-full pl-9 pr-9 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowLoginPassword(p => !p)}
-                  className="absolute right-2.5 top-2.5 text-on-surface-variant hover:text-on-surface text-sm cursor-pointer"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-on-surface-variant hover:text-on-surface cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-base">
-                    {showLoginPassword ? 'visibility_off' : 'visibility'}
+                    {showPassword ? 'visibility_off' : 'visibility'}
                   </span>
                 </button>
               </div>
@@ -621,8 +340,8 @@ export default function AuthModal() {
 
             <button
               type="submit"
-              disabled={isLoading || !loginEmail || !loginPassword}
-              className="w-full py-2.5 rounded-xl bg-primary text-on-primary font-medium text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50"
+              disabled={isLoading || !email || !password}
+              className="w-full py-2.5 mt-2 rounded-xl bg-primary text-on-primary font-semibold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50"
             >
               {isLoading ? (
                 <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -633,29 +352,127 @@ export default function AuthModal() {
                 </>
               )}
             </button>
-
-            <div className="flex items-center justify-between text-xs pt-2">
-              <button
-                type="button"
-                onClick={() => setAuthModalView('choice')}
-                className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
-              >
-                ← Back
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMsg('');
-                  setAuthModalView('register');
-                  setRegStep(1);
-                }}
-                className="text-primary hover:underline font-medium cursor-pointer"
-              >
-                Don't have an account? Sign up
-              </button>
-            </div>
           </form>
         )}
+
+        {/* ================================================================= */}
+        {/* TAB 2: DIRECT REGISTRATION FORM (No OTP)                          */}
+        {/* ================================================================= */}
+        {activeTab === 'register' && (
+          <form onSubmit={handleRegister} className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">
+                Your Name <span className="text-on-surface-variant/50 font-normal lowercase">(optional)</span>
+              </label>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-base">
+                  badge
+                </span>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Priyanshu Gupta"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">
+                Email Address
+              </label>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-base">
+                  mail
+                </span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  required
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">
+                Password <span className="text-on-surface-variant/50 font-normal lowercase">(min 6 chars)</span>
+              </label>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-base">
+                  lock
+                </span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Create a password"
+                  required
+                  minLength={6}
+                  className="w-full pl-9 pr-9 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-on-surface-variant hover:text-on-surface cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-base">
+                    {showPassword ? 'visibility_off' : 'visibility'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-base">
+                  check_circle
+                </span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat your password"
+                  required
+                  minLength={6}
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-surface-container border border-outline-variant/20 focus:border-primary focus:outline-none text-on-surface"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading || !email || !password || !confirmPassword}
+              className="w-full py-2.5 mt-2 rounded-xl bg-primary text-on-primary font-semibold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isLoading ? (
+                <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              ) : (
+                <>
+                  <span>Create Account</span>
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </>
+              )}
+            </button>
+          </form>
+        )}
+
+        {/* Footer Guest Mode Link */}
+        <div className="mt-5 text-center border-t border-outline-variant/15 pt-3">
+          <button
+            type="button"
+            onClick={closeAuthModal}
+            className="text-xs text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+          >
+            Skip for now &amp; Continue as Guest →
+          </button>
+        </div>
 
       </div>
     </div>

@@ -187,6 +187,38 @@ export async function verifyOtpApi(email, otp) {
 }
 
 /**
+ * Direct user registration (Email + Password + Name, no OTP).
+ */
+export async function directRegisterApi({ name, email, password }) {
+  const res = await fetch(`${AGENT_API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, email, password })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || 'Failed to create account.');
+  }
+  return data;
+}
+
+/**
+ * Google OAuth Login & Registration.
+ */
+export async function googleLoginApi({ credential, email, name, picture, sub }) {
+  const res = await fetch(`${AGENT_API_BASE}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential, email, name, picture, sub })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || 'Google sign in failed.');
+  }
+  return data;
+}
+
+/**
  * Step 3: Set password and finalize account creation.
  */
 export async function setPasswordApi({ email, verificationToken, password, name }) {

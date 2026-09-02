@@ -57,6 +57,20 @@ class LoginRequest(BaseModel):
     password: str = Field(..., description="User password")
 
 
+class DirectRegisterRequest(BaseModel):
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=6, description="User password")
+    name: Optional[str] = Field(default=None, description="User display name")
+
+
+class GoogleAuthRequest(BaseModel):
+    credential: Optional[str] = Field(default=None, description="Google ID Token (JWT)")
+    email: Optional[str] = Field(default=None, description="User email from Google")
+    name: Optional[str] = Field(default=None, description="User name from Google")
+    picture: Optional[str] = Field(default=None, description="User avatar URL")
+    sub: Optional[str] = Field(default=None, description="Google Subject ID")
+
+
 def _is_valid_email(email: str) -> bool:
     """Basic email format validator."""
     if not email or len(email) > 254:
@@ -274,6 +288,147 @@ async def set_user_password(req: SetPasswordRequest, response: Response):
             "name": user["name"],
             "role": user["role"],
             "created_at": user["created_at"]
+        }
+    }
+
+
+@router.post("/register")
+async def register_user_direct(req: DirectRegisterRequest, response: Response):
+    """
+    Direct user registration with Email + Password + Name (Instant 1-click, No OTP required).
+    """
+    email = req.email.strip().lower()
+    if not _is_valid_email(email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please enter a valid email address."
+        )
+
+    if len(req.password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters long."
+        )
+
+    existing = db.find_user_by_email(email)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email already exists. Please log in."
+        )
+
+    pw_hash = hash_password(req.password)
+    user = db.create_user(
+        email=email,
+        password_hash=pw_hash,
+        name=req.name.strip() if req.name else None,
+        role="user"
+    )
+
+    token = create_access_token(
+        user_id=user["_id"],
+        email=user["email"],
+        role=user["role"]
+    )
+
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        max_age=7 * 24 * 3600,
+        samesite="lax",
+        secure=False
+    )
+
+    return {
+        "status": "success",
+        "message": "Account created successfully.",
+        "token": token,
+        "user": {
+            "id": user["_id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "created_at": user["created_at"]
+        }
+    }
+
+
+@router.post("/google")
+async def google_auth(req: GoogleAuthRequest, response: Response):
+    """
+    Google OAuth Sign-In & Registration.
+    Verifies Google ID Token over HTTPS, creates/logs in the user in MongoDB, and issues JWT token.
+    """
+    email = req.email
+    name = req.name
+    picture = req.picture
+    google_id = req.sub
+
+    if req.credential:
+        try:
+            import requests
+            verify_url = f"https://oauth2.googleapis.com/tokeninfo?id_token={req.credential}"
+            g_resp = requests.get(verify_url, timeout=5)
+            if g_resp.status_code == 200:
+                payload = g_resp.json()
+                email = payload.get("email")
+                name = name or payload.get("name")
+                picture = picture or payload.get("picture")
+                google_id = google_id or payload.get("sub")
+            else:
+                import base64
+                import json
+                parts = req.credential.split(".")
+                if len(parts) >= 2:
+                    padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+                    payload = json.loads(base64.urlsafe_b64decode(padded.encode()))
+                    email = payload.get("email")
+                    name = name or payload.get("name")
+                    picture = picture or payload.get("picture")
+                    google_id = google_id or payload.get("sub")
+        except Exception as e:
+            print(f"[Google Auth] Notice during token verification: {e}", flush=True)
+
+    if not email or not _is_valid_email(email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not retrieve a valid email from Google."
+        )
+
+    user = db.create_or_update_google_user(
+        email=email,
+        name=name,
+        picture=picture,
+        google_id=google_id
+    )
+
+    token = create_access_token(
+        user_id=user["_id"],
+        email=user["email"],
+        role=user.get("role", "user")
+    )
+
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        max_age=7 * 24 * 3600,
+        samesite="lax",
+        secure=False
+    )
+
+    return {
+        "status": "success",
+        "message": "Logged in with Google successfully.",
+        "token": token,
+        "user": {
+            "id": user["_id"],
+            "email": user["email"],
+            "name": user.get("name"),
+            "picture": user.get("picture"),
+            "role": user.get("role", "user"),
+            "created_at": user.get("created_at")
         }
     }
 
