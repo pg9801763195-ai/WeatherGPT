@@ -394,7 +394,7 @@ export function WeatherProvider({ children }) {
       const agentResult = await queryWeatherAgent({
         query: userText,
         locationName: currentCity?.name,
-        languageCode: currentLanguage?.code || 'auto',
+        languageCode: 'auto',
         unit,
         token: authToken,
         conversationId: activeConvId
@@ -488,7 +488,7 @@ export function WeatherProvider({ children }) {
       const agentResult = await queryWeatherAgent({
         query: userMsg || `Weather for ${currentCity.name}`,
         locationName: currentCity?.name,
-        languageCode: currentLanguage?.code || 'auto',
+        languageCode: 'auto',
         unit
       });
 

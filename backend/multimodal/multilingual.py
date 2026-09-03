@@ -75,6 +75,20 @@ WEATHER_CONDITIONS: Dict[str, Dict[str, str]] = {
         "moderate rain": "বৃষ্টি",
         "heavy rain": "ভারী বৃষ্টি",
         "thunderstorm": "ঝড়-বৃষ্টি"
+    },
+    "or": {
+        "clear sky": "ପରିଷ୍କାର ଆକାଶ",
+        "sunny": "ଖରାଟିଆ ପାଗ",
+        "mainly clear": "ମୁଖ୍ୟତଃ ପରିଷ୍କାର",
+        "partly cloudy": "ଆଂଶିକ ମେଘୁଆ",
+        "overcast": "ମେଘାଚ୍ଛନ୍ନ",
+        "fog": "କୁହୁଡ଼ି",
+        "drizzle": "ଝିପିଝିପି ବର୍ଷା",
+        "light rain": "ହାଲୁକା ବର୍ଷା",
+        "moderate rain": "ବର୍ଷା",
+        "heavy rain": "ପ୍ରବଳ ବର୍ଷା",
+        "heavy intensity rain": "ଅତି ପ୍ରବଳ ବର୍ଷା",
+        "thunderstorm": "ବଜ୍ରପାତ ସହ ବର୍ଷା"
     }
 }
 
@@ -227,6 +241,32 @@ class IndicLanguageEngine:
                     )
                 return f"✅ **आज {city} मध्ये हवामान अनुकूल आहे ({temp}), फवारणी करू शकता.**"
             return f"🌤️ **{city} मध्ये सध्या तापमान {temp} आहे आणि {cond} आहे.**"
+
+        # -------------------------------------------------------------
+        # 5. ODIA (ଓଡ଼ିଆ) - Simple & Natural
+        # -------------------------------------------------------------
+        if lang == "or":
+            if any(w in query for w in ["ବର୍ଷା", "ପାଣି", "ଛତା", "ବାଦଲ", "rain", "umbrella"]):
+                if is_raining:
+                    return (
+                        f"🌧️ **ହଁ, ବର୍ତ୍ତମାନ {city} ରେ ବର୍ଷା ହେଉଛି!**\n\n"
+                        f"• **ତାପମାତ୍ରା:** {temp} (ଅନୁଭବ: {feels})\n"
+                        f"• **ପାଣିପାଗ:** {cond}\n"
+                        f"ବାହାରକୁ ଯିବା ସମୟରେ ଛତା କିମ୍ବା ରେନକୋଟ୍ ସାଙ୍ଗରେ ନିଅନ୍ତୁ।"
+                    )
+                else:
+                    return (
+                        f"☀️ **ଆଜି {city} ରେ ବର୍ଷାର ସମ୍ଭାବନା କମ୍ ଅଛି।**\n\n"
+                        f"• **ତାପମାତ୍ରା:** {temp} (ଅନୁଭବ: {feels})\n"
+                        f"• **ଆକାଶ:** {cond}\n"
+                        f"• **ପବନର ଗତି:** {wind} · **ଆର୍ଦ୍ରତା:** {humid}"
+                    )
+            return (
+                f"🌤️ **{city} ରେ ବର୍ତ୍ତମାନ ତାପମାତ୍ରା {temp} (ଅନୁଭବ: {feels}) ଅଛି ଏବଂ ଆକାଶ {cond} ରହିଛି।**\n\n"
+                f"• **ଆର୍ଦ୍ରତା (Humidity):** {humid}\n"
+                f"• **ପବନର ଗତି (Wind):** {wind}\n"
+                f"• **ବାୟୁମଣ୍ଡଳୀୟ ଚାପ:** {weather.surface_pressure_hpa:.0f} hPa"
+            )
 
         # Fallback to simple Hindi
         return self.generate_native_language_response("hi", query, weather, forecasts, nwp, alerts, advisory, climate)

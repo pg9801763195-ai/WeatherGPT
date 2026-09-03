@@ -236,9 +236,32 @@ class MultimodalWeatherAgent:
             fc_lines = [f"{f.date}: {f.weather_description}, High {f.temp_max_c:.0f}°C / Low {f.temp_min_c:.0f}°C, Rain {f.precipitation_probability_pct}%" for f in forecasts[:5]]
             fc_summary = "\n".join(fc_lines)
 
+        lang_map = {
+            "en": "English",
+            "hi": "pure Devanagari Hindi (हिन्दी)",
+            "hinglish": "Romanized Hinglish (Hindi written in English letters)",
+            "or": "pure Odia (ଓଡ଼ିଆ script)",
+            "bn": "pure Bengali (বাংলা script)",
+            "te": "pure Telugu (తెలుగు script)",
+            "ta": "pure Tamil (தமிழ் script)",
+            "mr": "pure Marathi (मराठी script)",
+            "gu": "pure Gujarati (ગુજરાતી script)",
+            "kn": "pure Kannada (ಕನ್ನಡ script)",
+            "ml": "pure Malayalam (മലയാളം script)",
+            "pa": "pure Punjabi (ਪੰਜਾਬੀ script)"
+        }
+        lang_target_desc = lang_map.get(lang, "natural English")
+
         llm_prompt = f"""User Question: "{raw_q}"
 Location: {city}
-Language to reply in: {lang} (Strictly: if 'en' use natural English, if 'hi' use pure Devanagari Hindi, if 'hinglish' use Roman Hinglish)
+Language to reply in: {lang_target_desc}
+
+CRITICAL LANGUAGE REQUIREMENT:
+The user query is in {lang_target_desc}. You MUST write your entire response strictly in {lang_target_desc}.
+If the language is Odia (or), write the full response in natural Odia script (ଓଡ଼ିଆ).
+If Hindi (hi), write in pure Devanagari Hindi.
+If Hinglish, write in conversational Hinglish.
+Do NOT default to English unless the language is 'en'.
 
 Real-Time Telemetry Data:
 - Temperature: {temp} (Feels like: {feels_like})
@@ -255,8 +278,8 @@ Forecast for Upcoming Days:
 {fc_summary}
 
 Instructions:
-1. Directly and accurately answer the user's question based on the real weather data.
-2. Provide practical, scenario-specific reasoning (e.g., if asking about drone flying, evaluate wind and visibility; if asking about painting, evaluate rain and humidity; if asking about health/UV/frizz/plants, evaluate the corresponding parameters).
+1. Directly and accurately answer the user's question in {lang_target_desc} based on the real weather data.
+2. Provide practical, scenario-specific reasoning (e.g., if asking about rain/umbrella, drone flying, travel, workout, etc.).
 3. Do NOT make up arbitrary numbers. Use emojis and clear markdown bullet points.
 """
         llm_response = self._call_llm_synthesis(llm_prompt)
@@ -525,6 +548,24 @@ Instructions:
             return f"🌤️ **{city}** में वर्तमान तापमान **{temp}** (अहसास: {feels_like}) है और मौसम **{cond}** है। आर्द्रता {humid:.0f}% और हवा {wind} की गति से चल रही है।"
         elif lang == "hinglish":
             return f"🌤️ **{city}** mein abhi temperature **{temp}** (feels like {feels_like}) hai aur mausam **{cond}** hai. Humidity {humid:.0f}% aur hawa {wind} hai."
+        elif lang == "or":
+            return f"🌤️ **{city} ରେ ବର୍ତ୍ତମାନ ତାପମାତ୍ରା {temp} (ଅନୁଭବ: {feels_like}) ଅଛି ଏବଂ ଆକାଶ {cond} ରହିଛି।**\n\n• **ଆର୍ଦ୍ରତା (Humidity):** {humid:.0f}%\n• **ପବନର ଗତି (Wind):** {wind}\n• **ବାୟୁମଣ୍ଡଳୀୟ ଚାପ:** {pressure}\n• **ୟୁଭି ଇଣ୍ଡେକ୍ସ (UV Index):** {uv:.1f}"
+        elif lang == "te":
+            return f"🌤️ **{city} లో ప్రస్తుతం ఉష్ణోగ్రత {temp} (అనిపిస్తుంది: {feels_like}) మరియు వాతావరణం {cond}.**\n\n• **తేమ (Humidity):** {humid:.0f}%\n• **గాలి వేగం (Wind):** {wind}\n• **పీడనం:** {pressure}\n• **UV ఇండెక్స్:** {uv:.1f}"
+        elif lang == "ta":
+            return f"🌤️ **{city}யில் தற்போதைய வெப்பநிலை {temp} (உணர்வு: {feels_like}) மற்றும் வானம் {cond}.**\n\n• **ஈரப்பதம் (Humidity):** {humid:.0f}%\n• **காற்றின் வேகம்:** {wind}\n• **அழுத்தம்:** {pressure}\n• **UV குறியீடு:** {uv:.1f}"
+        elif lang == "bn":
+            return f"🌤️ **{city}-তে বর্তমান তাপমাত্রা {temp} (অনুভূতি: {feels_like}) এবং আকাশ {cond}।**\n\n• **আর্দ্রতা (Humidity):** {humid:.0f}%\n• **বাতাসের গতি (Wind):** {wind}\n• **বায়ুমণ্ডলীয় চাপ:** {pressure}\n• **ইউভি সূচক (UV Index):** {uv:.1f}"
+        elif lang == "mr":
+            return f"🌤️ **{city} मध्ये सध्या तापमान {temp} (जाणवते: {feels_like}) आहे आणि हवामान {cond} आहे।**\n\n• **आर्द्रता (Humidity):** {humid:.0f}%\n• **वाऱ्याचा वेग (Wind):** {wind}\n• **दाब:** {pressure}\n• **UV निर्देशांक:** {uv:.1f}"
+        elif lang == "gu":
+            return f"🌤️ **{city} માં વર્તમાન તાપમાન {temp} (અનુભવાય છે: {feels_like}) છે અને હવામાન {cond} છે.**\n\n• **ભેજ (Humidity):** {humid:.0f}%\n• **પવનની ગતિ:** {wind}\n• **દબાણ:** {pressure}\n• **યુવી ઇન્ડેક્સ:** {uv:.1f}"
+        elif lang == "kn":
+            return f"🌤️ **{city} ನಲ್ಲಿ ಪ್ರಸ್ತುತ ತಾಪಮಾನ {temp} (ಅನುಭವ: {feels_like}) ಮತ್ತು ಆಕಾಶ {cond} ಇದೆ.**\n\n• **ತೇವಾಂಶ (Humidity):** {humid:.0f}%\n• **ಗಾಳಿಯ ವೇಗ:** {wind}\n• **ಒತ್ತಡ:** {pressure}\n• **ಯುವಿ ಸೂಚ್ಯಂಕ:** {uv:.1f}"
+        elif lang == "ml":
+            return f"🌤️ **{city}-ൽ നിലവിലെ താപനില {temp} (അനുഭവപ്പെടുന്നത്: {feels_like}) ആണ്, കാലാവസ്ഥ {cond} ആണ്.**\n\n• **ഈർപ്പം (Humidity):** {humid:.0f}%\n• **കാറ്റിന്റെ വേഗത:** {wind}\n• **മർദ്ദം:** {pressure}\n• **UV സൂചിക:** {uv:.1f}"
+        elif lang == "pa":
+            return f"🌤️ **{city} ਵਿੱਚ ਮੌਜੂਦਾ ਤਾਪਮਾਨ {temp} (ਮਹਿਸੂਸ: {feels_like}) ਹੈ ਅਤੇ ਮੌਸਮ {cond} ਹੈ।**\n\n• **ਨਮੀ (Humidity):** {humid:.0f}%\n• **ਹਵਾ ਦੀ ਗਤੀ:** {wind}\n• **ਦਬਾਅ:** {pressure}\n• **ਯੂਵੀ ਇੰਡੈਕਸ:** {uv:.1f}"
         return f"🌤️ In **{city}**, it is currently **{temp}** (feels like **{feels_like}**) with **{cond}**.\n\n• **Humidity:** {humid:.0f}%\n• **Wind Speed:** {wind}\n• **Pressure:** {pressure}\n• **UV Index:** {uv:.1f}"
 
     def process_query(self, input_data: MultimodalInput, session_id: str = "default") -> AgentResponse:
@@ -545,9 +586,15 @@ Instructions:
 
         # 1. SEMANTIC QUERY UNDERSTANDING + CONVERSATION CONTEXT RESOLUTION
         structured_query = self.query_engine.understand_query(query_text, session_id=session_id)
-        target_lang = input_data.language_code or structured_query.language
-        if target_lang == "auto":
-            target_lang = structured_query.language
+        
+        # Determine language: Detect language of question first, then answer in the exact same language!
+        detected_query_lang = structured_query.language
+        if detected_query_lang and detected_query_lang != "en":
+            target_lang = detected_query_lang
+        elif input_data.language_code and input_data.language_code != "auto":
+            target_lang = input_data.language_code
+        else:
+            target_lang = detected_query_lang or "en"
 
         ctx = self.query_engine.memory.get_context(session_id)
 
