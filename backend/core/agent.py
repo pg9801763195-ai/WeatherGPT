@@ -7,6 +7,7 @@ historical climate reanalysis, Agentic RAG, remote sensing vision, and neural In
 import os
 import re
 import time
+from datetime import datetime, timedelta
 import concurrent.futures
 from typing import Optional, Dict, Any, List, Tuple
 import requests
@@ -229,11 +230,133 @@ class MultimodalWeatherAgent:
         time_ref = resolved_query.time_reference or "today"
 
         # -------------------------------------------------------------
+        # 0. DYNAMIC TARGET FORECAST & CALENDAR DATE RESOLUTION
+        # -------------------------------------------------------------
+        target_fc: Optional[DailyForecastItem] = None
+        date_label_en = "today"
+        date_label_hi = "आज"
+        date_label_or = "ଆଜି"
+        date_label_hinglish = "aaj"
+        is_future = False
+
+        month_map = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'sept': 9, 'september': 9, 'oct': 10, 'nov': 11, 'dec': 12
+        }
+        weekday_map = {
+            'monday': 0, 'somwar': 0, 'somavara': 0, 'ସୋମବାର': 0,
+            'tuesday': 1, 'mangalwar': 1, 'mangalavara': 1, 'ମଙ୍ଗଳବାର': 1,
+            'wednesday': 2, 'budhwar': 2, 'budhavara': 2, 'ବୁଧବାର': 2,
+            'thursday': 3, 'guruwar': 3, 'guruvara': 3, 'ଗୁରୁବାର': 3,
+            'friday': 4, 'shukrawar': 4, 'shukravara': 4, 'ଶୁକ୍ରବାର': 4,
+            'saturday': 5, 'shaniwar': 5, 'shanivara': 5, 'ଶନିବାର': 5,
+            'sunday': 6, 'ravivar': 6, 'ravivara': 6, 'aitwar': 6, 'ରବିବାର': 6
+        }
+
+        # 1. Normalize all Indian numerals (Devanagari, Odia, Bengali, Telugu, etc.) to ASCII digits
+        digit_map = {
+            '०':'0','१':'1','२':'2','३':'3','४':'4','५':'5','६':'6','७':'7','८':'8','९':'9',
+            '୦':'0','୧':'1','୨':'2','୩':'3','୪':'4','୫':'5','୬':'6','୭':'7','୮':'8','୯':'9',
+            '০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9',
+            '౦':'0','౧':'1','౨':'2','౩':'3','౪':'4','౵':'5','౶':'6','౷':'7','౸':'8','౹':'9',
+            '૦':'0','૧':'1','૨':'2','૩':'3','૪':'4','૫':'5','૬':'6','૭':'7','૮':'8','૯':'9',
+            '੦':'0','੧':'1','੨':'2','੩':'3','੪':'4','੫':'5','੬':'6','੭':'7','੮':'8','੯':'9',
+        }
+        raw_q_norm = raw_q_lower
+        for k, v in digit_map.items():
+            raw_q_norm = raw_q_norm.replace(k, v)
+
+        # Match explicit dates (e.g. '6th sept', 'sept 6', '6 september', 'on 6th', '6th ko', '6 tarikh', '६ तारीख', '୬ ତାରିଖ')
+        m1 = re.search(r'(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|september|oct|nov|dec)[a-z]*', raw_q_norm)
+        m2 = re.search(r'(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|september|oct|nov|dec)[a-z]*\s*(\d{1,2})(?:st|nd|rd|th)?', raw_q_norm)
+        
+        is_multi_day_count = bool(re.search(r'\b\d{1,2}\s*(?:days?|dino?|din|दिन|ଦିନ|ଦିନର|दिनों)\b', raw_q_norm))
+        m3 = None
+        if not is_multi_day_count:
+            m3 = re.search(r'(?:on\s+the\s+|on\s+|ko\s+|tarikh\s+|date\s+|ତାରିଖ\s*)(\d{1,2})(?:st|nd|rd|th|\s*ko|\s*tarikh|\s*tarik|\s*ତାରିଖ|\s*তারিখ|\s*తేదీ|\s*தேதி|\s*तारीख|\s*date)?\b', raw_q_norm)
+            if not m3:
+                m3 = re.search(r'\b(\d{1,2})(?:st|nd|rd|th|\s+ko|\s+tarikh|\s+tarik|\s+ତାରିଖ|\s+तारीख|\s+date)\b', raw_q_norm)
+
+        matched_day = None
+        matched_month = None
+        if m1:
+            matched_day = int(m1.group(1))
+            mon_s = m1.group(2)[:4] if m1.group(2).startswith('sept') else m1.group(2)[:3]
+            matched_month = month_map.get(mon_s)
+        elif m2:
+            mon_s = m2.group(1)[:4] if m2.group(1).startswith('sept') else m2.group(1)[:3]
+            matched_month = month_map.get(mon_s)
+            matched_day = int(m2.group(2))
+        elif m3:
+            matched_day = int(m3.group(1))
+
+        if matched_day and forecasts:
+            for f in forecasts:
+                try:
+                    dt = datetime.strptime(f.date, '%Y-%m-%d')
+                    if dt.day == matched_day and (matched_month is None or dt.month == matched_month):
+                        target_fc = f
+                        date_label_en = f"on {dt.strftime('%A, %d %B')}"
+                        date_label_hi = f"{dt.strftime('%d %B')} को"
+                        date_label_or = f"{dt.strftime('%d %B')} ରେ"
+                        date_label_hinglish = f"{dt.strftime('%d %B')} ko"
+                        is_future = True
+                        break
+                except Exception:
+                    pass
+
+        # 2. Match weekdays if date not matched yet
+        if not target_fc and forecasts:
+            for w_name, w_idx in weekday_map.items():
+                if w_name in raw_q_lower or w_name in raw_q:
+                    for f in forecasts[1:]:
+                        try:
+                            dt = datetime.strptime(f.date, '%Y-%m-%d')
+                            if dt.weekday() == w_idx:
+                                target_fc = f
+                                date_label_en = f"on {dt.strftime('%A, %d %B')}"
+                                date_label_hi = f"{dt.strftime('%A, %d %B')} को"
+                                date_label_or = f"{dt.strftime('%A, %d %B')} ରେ"
+                                date_label_hinglish = f"{dt.strftime('%A, %d %B')} ko"
+                                is_future = True
+                                break
+                        except Exception:
+                            pass
+                    if target_fc:
+                        break
+
+        # 3. Match relative terms (tomorrow, day after tomorrow, weekend)
+        if not target_fc:
+            if time_ref == "tomorrow" and fc_tomorrow:
+                target_fc = fc_tomorrow
+                date_label_en = "tomorrow"
+                date_label_hi = "कल"
+                date_label_or = "ଆସନ୍ତାକାଲି"
+                date_label_hinglish = "kal"
+                is_future = True
+            elif time_ref == "day_after_tomorrow" and fc_day_after:
+                target_fc = fc_day_after
+                date_label_en = "the day after tomorrow"
+                date_label_hi = "परसों"
+                date_label_or = "ଆରଦିନ"
+                date_label_hinglish = "parso"
+                is_future = True
+            elif time_ref == "weekend" and forecasts and len(forecasts) > 1:
+                target_fc = forecasts[1]
+                date_label_en = "this weekend"
+                date_label_hi = "इस वीकेंड"
+                date_label_or = "ଏହି ସପ୍ତାହାନ୍ତରେ"
+                date_label_hinglish = "is weekend"
+                is_future = True
+            elif forecasts:
+                target_fc = forecasts[0]
+
+        # -------------------------------------------------------------
         # 1. ATTEMPT FULL LLM SYNTHESIS (Gemini / Groq / Ollama)
         # -------------------------------------------------------------
         fc_summary = ""
         if forecasts:
-            fc_lines = [f"{f.date}: {f.weather_description}, High {f.temp_max_c:.0f}°C / Low {f.temp_min_c:.0f}°C, Rain {f.precipitation_probability_pct}%" for f in forecasts[:5]]
+            fc_lines = [f"{f.date}: {f.weather_description}, High {f.temp_max_c:.0f}°C / Low {f.temp_min_c:.0f}°C, Rain {f.precipitation_probability_pct}%" for f in forecasts[:7]]
             fc_summary = "\n".join(fc_lines)
 
         lang_map = {
@@ -255,6 +378,7 @@ class MultimodalWeatherAgent:
         llm_prompt = f"""User Question: "{raw_q}"
 Location: {city}
 Language to reply in: {lang_target_desc}
+Target Timeframe / Date: {date_label_en} ({target_fc.date if target_fc else 'today'}) (CRITICAL: Focus your response strictly on this specific day's forecast data!)
 
 CRITICAL LANGUAGE REQUIREMENT:
 The user query is in {lang_target_desc}. You MUST write your entire response strictly in {lang_target_desc}.
@@ -278,7 +402,7 @@ Forecast for Upcoming Days:
 {fc_summary}
 
 Instructions:
-1. Directly and accurately answer the user's question in {lang_target_desc} based on the real weather data.
+1. Directly and accurately answer the user's question for the requested time ({time_ref}) in {lang_target_desc} based on the real weather and forecast data.
 2. Provide practical, scenario-specific reasoning (e.g., if asking about rain/umbrella, drone flying, travel, workout, etc.).
 3. Do NOT make up arbitrary numbers. Use emojis and clear markdown bullet points.
 """
@@ -289,174 +413,81 @@ Instructions:
         # -------------------------------------------------------------
         # 2. UNIVERSAL MULTI-DOMAIN REASONING ENGINE (High-Precision Fallback)
         # -------------------------------------------------------------
+        def _has_kw(keywords: List[str]) -> bool:
+            for kw in keywords:
+                if any(ord(c) > 127 for c in kw):
+                    if kw in raw_q_lower:
+                        return True
+                else:
+                    if re.search(r'\b' + re.escape(kw) + r'\b', raw_q_lower):
+                        return True
+            return False
 
-        # A. Drone Flying / UAV / Aeromodelling
-        if any(w in raw_q_lower for w in ["drone", "fly drone", "flying drone", "uav", "quadcopter"]):
-            if is_raining or wind_val > 28.0:
+        # 1. Rain & Precipitation (e.g. umbrella, rain today/tomorrow)
+        if resolved_query.intent == CanonicalIntent.PRECIPITATION or _has_kw(["rain", "raining", "umbrella", "shower", "drizzle", "downpour", "बारिश", "बरसात", "छाता", "ବର୍ଷା", "ଛତା"]):
+            if is_future and target_fc:
+                rain_prob = target_fc.precipitation_probability_pct
+                if rain_prob >= 40:
+                    if lang == "hi":
+                        return f"🌦️ **{date_label_hi} {city} में बारिश के आसार हैं!**\n\n• **बारिश की संभावना:** **{rain_prob}%** (~{target_fc.precipitation_sum_mm:.1f} mm)\n• **पूर्वानुमान:** {target_fc.weather_description}\n• **तापमान:** अधिकतम **{target_fc.temp_max_c:.0f}°C** / न्यूनतम **{target_fc.temp_min_c:.0f}°C**\n• छाता या रेनकोट साथ रखना अच्छा रहेगा।"
+                    elif lang == "hinglish":
+                        return f"🌦️ **{date_label_hinglish} {city} mein barish ke chances hain!**\n\n• **Rain Probability:** **{rain_prob}%** (~{target_fc.precipitation_sum_mm:.1f} mm)\n• **Forecast:** {target_fc.weather_description}\n• **Temp:** High **{target_fc.temp_max_c:.0f}°C** / Low **{target_fc.temp_min_c:.0f}°C**\n• Umbrella carry karna recommended hai."
+                    elif lang == "or":
+                        return f"🌦️ **{date_label_or} {city} ରେ ବର୍ଷା ହେବାର ସମ୍ଭାବନା ଅଛି!**\n\n• **ବର୍ଷା ସମ୍ଭାବନା:** **{rain_prob}%** (~{target_fc.precipitation_sum_mm:.1f} mm)\n• **ପୂର୍ବାନୁମାନ:** {target_fc.weather_description}\n• **ତାପମାତ୍ରା:** ସର୍ବାଧିକ **{target_fc.temp_max_c:.0f}°C** / ସର୍ବନିମ୍ନ **{target_fc.temp_min_c:.0f}°C**\n• ଛତା କିମ୍ବା ରେନକୋଟ୍ ସାଙ୍ଗରେ ନିଅନ୍ତୁ।"
+                    return f"🌦️ **Rain is likely in {city} {date_label_en}!**\n\n• **Precipitation Probability:** **{rain_prob}%** (~{target_fc.precipitation_sum_mm:.1f} mm)\n• **Forecast:** **{target_fc.weather_description}**\n• **Temperatures:** High **{target_fc.temp_max_c:.0f}°C** / Low **{target_fc.temp_min_c:.0f}°C**\n• Carrying a compact umbrella is recommended."
+                else:
+                    if lang == "hi":
+                        return f"☀️ **{date_label_hi} {city} में बारिश की संभावना कम है।**\n\n• **मौसम:** {target_fc.weather_description}\n• **बारिश का जोखिम:** कम ({rain_prob}%)\n• **तापमान:** अधिकतम **{target_fc.temp_max_c:.0f}°C** / न्यूनतम **{target_fc.temp_min_c:.0f}°C**\n• छाता ले जाने की आवश्यकता नहीं है।"
+                    elif lang == "hinglish":
+                        return f"☀️ **{date_label_hinglish} {city} mein barish ki possibility kam hai.**\n\n• **Skies:** {target_fc.weather_description}\n• **Rain Risk:** Low ({rain_prob}%)\n• **Temp:** High **{target_fc.temp_max_c:.0f}°C** / Low **{target_fc.temp_min_c:.0f}°C**"
+                    elif lang == "or":
+                        return f"☀️ **{date_label_or} {city} ରେ ବର୍ଷା ସମ୍ଭାବନା କମ୍ ଅଛି।**\n\n• **ଆକାଶ:** {target_fc.weather_description}\n• **ବର୍ଷା ଆଶଙ୍କା:** କମ୍ ({rain_prob}%)\n• **ତାପମାତ୍ରା:** ସର୍ବାଧିକ **{target_fc.temp_max_c:.0f}°C** / ସର୍ବନିମ୍ନ **{target_fc.temp_min_c:.0f}°C**"
+                    return f"☀️ **No significant rain expected in {city} {date_label_en}.**\n\n• **Skies:** **{target_fc.weather_description}**\n• **Rain Risk:** Low ({rain_prob}%)\n• **Temperatures:** High **{target_fc.temp_max_c:.0f}°C** / Low **{target_fc.temp_min_c:.0f}°C**\n• An umbrella is not necessary today."
+            elif is_raining:
                 if lang == "hi":
-                    return f"🚁 **आज {city} में ड्रोन उड़ाना सुरक्षित नहीं है!**\n\n• **कारण:** {'बारिश हो रही है' if is_raining else f'हवा की गति तेज है ({wind})'}।\n• **सुरक्षा सलाह:** ड्रोन के मोटर्स व इलेक्ट्रॉनिक्स को सुरक्षित रखने के लिए मौसम साफ़ और हवा शांत (<20 km/h) होने तक प्रतीक्षा करें।"
+                    return f"🌧️ **हाँ, {city} में अभी बारिश हो रही है!**\n\n• **वर्तमान तापमान:** **{temp}** (बारिश: {precip:.1f} mm/h, {cond})\n• बाहर जाते समय **छाता या रेनकोट** जरूर साथ रखें।"
                 elif lang == "hinglish":
-                    return f"🚁 **Aaj {city} mein drone fly karna safe nahi hai!**\n\n• **Reason:** {'Abhi barish chal rahi hai' if is_raining else f'Hawa ki speed tez hai ({wind})'}। Drone control khone ya damage ka risk hai. Wind calm hone ka wait karein."
-                return f"🚁 **Not recommended to fly a drone in {city} right now!**\n\n• **Hazard:** {'Active precipitation will damage electronic motors.' if is_raining else f'Wind speeds at {wind} exceed safe operational stability for consumer drones.'}\n• **Safety Window:** Wait for winds under 20 km/h and dry skies."
-            else:
+                    return f"🌧️ **Haan, {city} mein abhi barish ho rahi hai!** Current temp **{temp}** hai ({precip:.1f} mm/h). Umbrella zaroor saath rakhein."
+                return f"🌧️ **Yes, it is raining in {city}!** Current temperature is **{temp}** with active precipitation ({precip:.1f} mm/h). Make sure to carry an umbrella."
+            rain_chance = forecasts[0].precipitation_probability_pct if forecasts else 20
+            if rain_chance >= 40:
                 if lang == "hi":
-                    return f"🚁 **हाँ! {city} में ड्रोन उड़ाने के लिए मौसम अनुकूल है!**\n\n• **हवा की गति:** {wind} (स्थिर व सुरक्षित)\n• **दृश्यता (Visibility):** {visibility} · बादल: {cloud_cover:.0f}%\n• **सलाह:** लाइन-ऑफ-साइट बनाए रखें और बैटरी तापमान पर ध्यान दें।"
+                    return f"🌦️ **आज {city} में बारिश की {rain_chance}% संभावना है!**\n\n• **मौसम:** {temp}, {cond}\n• एहतियात के तौर पर छोटा छाता साथ रखना अच्छा रहेगा।"
                 elif lang == "hinglish":
-                    return f"🚁 **Haan! Aaj {city} mein drone uda sakte hain!**\n\n• **Wind Speed:** {wind} (safe & stable)\n• **Visibility:** {visibility} · Cloud cover: {cloud_cover:.0f}%\n• Safe flying conditions available."
-                return f"🚁 **Good conditions for drone flying in {city}!**\n\n• **Wind Speed:** {wind} (within safe limits < 25 km/h)\n• **Visibility:** {visibility} · Cloud cover: {cloud_cover:.0f}%\n• Skies are favorable for aerial photography and flight stability."
-
-        # B. Stargazing / Astronomy / Night Sky
-        if any(w in raw_q_lower for w in ["stargaze", "stargazing", "stars", "telescope", "astronomy", "night sky", "तारों", "आकाश"]):
-            if cloud_cover > 50.0 or is_raining:
-                if lang == "hi":
-                    return f"🔭 **आज रात {city} में तारे देखना (Stargazing) कठिन होगा।**\n\n• **बादल आवरण:** {cloud_cover:.0f}% ({cond})\n• **आर्द्रता:** {humid:.0f}%\n• बादलों के कारण आकाशीय पिंड स्पष्ट दिखाई नहीं देंगे।"
-                elif lang == "hinglish":
-                    return f"🔭 **Aaj raat {city} mein stargazing karna mushkil hoga.**\n\n• **Cloud Cover:** {cloud_cover:.0f}% ({cond})\n• Sky overcast hone ke karan stars aur planets clear nahi dikhenge."
-                return f"🔭 **Poor conditions for stargazing in {city} tonight.**\n\n• **Cloud Cover:** {cloud_cover:.0f}% ({cond})\n• **Humidity:** {humid:.0f}%\n• Dense cloud cover will obstruct telescope and naked-eye celestial visibility."
-            else:
-                if lang == "hi":
-                    return f"✨ **आज रात {city} में तारे देखने के लिए बेहतरीन रात है!**\n\n• **आसमान:** साफ़ ({cloud_cover:.0f}% बादल)\n• **दृश्यता:** {visibility}\n• टेलिस्कोप और खगोलीय अवलोकन के लिए परिस्थितियां आदर्श हैं।"
-                elif lang == "hinglish":
-                    return f"✨ **Aaj raat {city} mein stargazing ke liye perfect mausam hai!**\n\n• **Sky:** Clear ({cloud_cover:.0f}% clouds)\n• **Visibility:** {visibility}\n• Stars, constellations aur planets clear nazar aayenge."
-                return f"✨ **Excellent stargazing conditions in {city} tonight!**\n\n• **Cloud Cover:** Minimal ({cloud_cover:.0f}%)\n• **Atmospheric Visibility:** {visibility}\n• Clear atmospheric columns provide optimal clarity for astronomy and astrophotography."
-
-        # C. Painting / Exterior Staining / House Coating
-        if any(w in raw_q_lower for w in ["paint", "painting", "stain", "coating", "color my house", "रंग-रोगन"]):
-            if is_raining or humid > 75.0 or (forecasts and forecasts[0].precipitation_probability_pct > 35):
-                if lang == "hi":
-                    return f"🎨 **आज {city} में घर या दीवार पर पेंट न करें!**\n\n• **कारण:** हवा में नमी {humid:.0f}% है और बारिश का जोखिम है।\n• पेंट ठीक से नहीं सूखेगा और धब्बे पड़ सकते हैं। पेंटिंग के लिए नमी <70% और सूखा मौसम आवश्यक है।"
-                elif lang == "hinglish":
-                    return f"🎨 **Aaj {city} mein paint ka kaam mat karwao!**\n\n• **Humidity:** {humid:.0f}% aur barish ka risk hai. Paint dry hone mein dikkat hogi aur finishing kharab ho sakti hai."
-                return f"🎨 **Do not paint exterior walls or surfaces in {city} today!**\n\n• **Risk:** High humidity ({humid:.0f}%) and active/forecast precipitation will ruin paint curing and adhesion.\n• **Recommendation:** Wait for a 48-hour dry window with humidity under 70%."
-            else:
-                if lang == "hi":
-                    return f"🎨 **हाँ, आज {city} में पेंटिंग का काम किया जा सकता है!**\n\n• **तापमान:** {temp} · आर्द्रता: {humid:.0f}%\n• मौसम सूखा है जिससे पेंट समय पर सूख जाएगा।"
-                elif lang == "hinglish":
-                    return f"🎨 **Haan, aaj {city} mein paint karwane ke liye badhiya din hai!** Mausam dry hai ({humid:.0f}% humidity) aur dhoop acchi hai."
-                return f"🎨 **Favorable conditions for painting in {city} today!**\n\n• **Temperature:** {temp} · **Humidity:** {humid:.0f}%\n• Dry atmospheric conditions provide ideal paint drying and surface curing."
-
-        # D. Hair Frizz / Humidity Comfort / Skin
-        if any(w in raw_q_lower for w in ["frizz", "hair", "skin", "sweaty", "chipchip", "chiphcipa", "बाल", "चिपचिपा"]):
-            if humid >= 70.0:
-                if lang == "hi":
-                    return f"💇 **आज {city} में अत्यधिक चिपचिपापन व उमस है!**\n\n• **आर्द्रता:** **{humid:.0f}%** (तापमान: {temp}, अहसास: {feels_like})\n• **सुझाव:** बालों में फ्रिज़ (frizz) बढ़ सकता है। एंटी-फ्रिज़ सीरम का उपयोग करें और सूती कपड़े पहनें।"
-                elif lang == "hinglish":
-                    return f"💇 **Aaj {city} mein kaafi humidity aur chipchipapan hai!**\n\n• **Humidity:** **{humid:.0f}%** (Feels like: {feels_like})\n• High moisture ki wajah se baal frizzy ho sakte hain. Hydrate rahein aur lightweight clothes pehnein."
-                return f"💇 **High humidity alert for {city} today!**\n\n• **Relative Humidity:** **{humid:.0f}%** (Feels like: {feels_like})\n• Elevated atmospheric moisture increases hair frizz and sweat evaporation resistance. Anti-frizz products and breathable cotton wear recommended."
-            else:
-                if lang == "hi":
-                    return f"💇 **आज {city} में उमस सामान्य है ({humid:.0f}%)।** बाल और त्वचा के लिए मौसम आरामदायक है।"
-                elif lang == "hinglish":
-                    return f"💇 **Aaj {city} mein humidity normal hai ({humid:.0f}%)।** Mausam comfortable rahega."
-                return f"💇 **Comfortable humidity levels in {city} today ({humid:.0f}%).** Low frizz risk and pleasant ambient air comfort."
-
-        # E. UV Radiation / Sunscreen / Sunburn
-        if any(w in raw_q_lower for w in ["uv", "sunscreen", "sunburn", "tan", "tanning", "धूप", "सनस्क्रीन"]):
-            uv_advice_en = "Apply SPF 30+ sunscreen, wear UV-blocking sunglasses, and limit direct exposure between 11 AM – 3 PM." if uv >= 6.0 else "Minimal UV hazard; standard skincare is sufficient."
+                    return f"🌦️ **Aaj {city} mein barish ke {rain_chance}% chances hain!** ({temp}, {cond}). Compact umbrella saath rakhna safe rahega."
+                elif lang == "or":
+                    return f"🌦️ **ଆଜି {city} ରେ ବର୍ଷା ହେବାର {rain_chance}% ସମ୍ଭାବନା ଅଛି!**\n\n• **ପାଣିପାଗ:** {temp}, {cond}\n• ସାବଧାନତା ପାଇଁ ଛତା ସାଙ୍ଗରେ ରଖିବା ଭଲ ହେବ।"
+                return f"🌦️ There is a **{rain_chance}% chance of rain** later today in **{city}** ({temp}, {cond}). Carrying a compact umbrella is recommended."
             if lang == "hi":
-                return f"☀️ **{city} में यूवी (UV) इंडेक्स रिपोर्ट:**\n\n• **वर्तमान UV इंडेक्स:** **{uv:.1f}** ({'अत्यधिक / तीव्र' if uv >= 6.0 else 'सामान्य'})\n• **सुझाव:** {'SPF 30+ सनस्क्रीन लगाएं, धूप का चश्मा पहनें और दोपहर में सीधी धूप से बचें।' if uv >= 6.0 else 'यूवी जोखिम कम है, सामान्य रूप से बाहर निकल सकते हैं।'}"
+                return f"☀️ **आज {city} में बारिश की संभावना बहुत कम है ({rain_chance}%)।**\n\n• **मौसम:** {temp}, {cond}\n• छाता ले जाने की आवश्यकता नहीं है।"
             elif lang == "hinglish":
-                return f"☀️ **{city} UV Index Status:**\n\n• **Current UV Level:** **{uv:.1f}** ({'High' if uv >= 6.0 else 'Moderate'})\n• **Tip:** {'SPF 30+ sunscreen lagayein aur dopeher ki tez dhoop se bachein.' if uv >= 6.0 else 'UV risk normal hai.'}"
-            return f"☀️ **UV Radiation Index for {city}:**\n\n• **Current UV Level:** **{uv:.1f}** ({'High Solar Intensity' if uv >= 6.0 else 'Low-to-Moderate'})\n• **Action:** {uv_advice_en}"
+                return f"☀️ **Aaj {city} mein barish ke chances kam hain ({rain_chance}%)।** Skies **{cond}** hain aur temp **{temp}** hai."
+            elif lang == "or":
+                return f"☀️ **ଆଜି {city} ରେ ବର୍ଷା ହେବାର ସମ୍ଭାବନା ବହୁତ କମ୍ ({rain_chance}%)।**\n\n• **ପାଣିପାଗ:** {temp}, {cond}\n• ଛତା ନେବାର ଆବଶ୍ୟକତା ନାହିଁ।"
+            return f"☀️ **No significant rain expected right now in {city}.** Skies are **{cond}** and temperature is **{temp}**. An umbrella is not needed today."
 
-        # F. Barometric Pressure / Headache / Joint Pain / Migraines
-        if any(w in raw_q_lower for w in ["pressure", "headache", "migraine", "joint pain", "barometric", "सिरदर्द"]):
-            if lang == "hi":
-                return f"🩺 **{city} में वायुमंडलीय दबाव (Barometric Pressure):**\n\n• **वर्तमान दबाव:** **{pressure}** ({cond})\n• **मौसम प्रभाव:** मौसम प्रणाली में बदलाव और नमी ({humid:.0f}%) के कारण संवेदनशील लोगों में हल्का सिरदर्द या माइग्रेन ट्रिगर हो सकता है। हाइड्रेटेड रहें।"
-            elif lang == "hinglish":
-                return f"🩺 **{city} Atmospheric Pressure:**\n\n• **Current Pressure:** **{pressure}**\n• Weather shifts aur high humidity ({humid:.0f}%) se migraine ya sinus pressure feel ho sakta hai. Plenty of water piyein."
-            return f"🩺 **Barometric Pressure & Health Context for {city}:**\n\n• **Surface Pressure:** **{pressure}** with **{cond}** skies\n• **Physiological Impact:** Rapid barometric fluctuations and high humidity ({humid:.0f}%) can influence sinus and migraine sensitivities. Stay well-hydrated and rest in well-ventilated spaces."
-
-        # G. Cycling / Biking / Motorcycle
-        if any(w in raw_q_lower for w in ["cycle", "cycling", "bike", "biking", "motorcycle", "राइड"]):
-            if is_raining or wind_val > 30.0:
-                if lang == "hi":
-                    return f"🚴 **आज {city} में साइकिल या बाइक राइडिंग करते समय सतर्क रहें!**\n\n• **कारण:** {'सड़कें गीली हैं (बारिश जारी है)' if is_raining else f'तेज हवा ({wind})'}\n• ब्रेक लगाने की दूरी बढ़ जाएगी। धीमी गति में चलें और वाटरप्रूफ गियर पहनें।"
-                elif lang == "hinglish":
-                    return f"🚴 **{city} mein cycling/bike ride ke waqt caution rakhein!**\n\n• Roads geeli hain aur wind **{wind}** chal rahi hai. Helmet aur rain gear zaroor use karein."
-                return f"🚴 **Adverse cycling and motorcycling conditions in {city}!**\n\n• **Conditions:** {'Wet asphalt and reduced tire braking grip.' if is_raining else f'High crosswinds at {wind}.'}\n• Wear high-visibility gear, allow increased stopping distance, and reduce cornering speeds."
-            else:
-                if lang == "hi":
-                    return f"🚴 **हाँ, आज {city} में साइकिल या बाइक राइडिंग के लिए बढ़िया मौसम है!** तापमान {temp} और हवा {wind} है।"
-                elif lang == "hinglish":
-                    return f"🚴 **Haan, aaj {city} mein cycling ke liye accha mausam hai!** Temperature {temp} aur smooth roads hain."
-                return f"🚴 **Great conditions for cycling and motorcycling in {city}!** Temperature is **{temp}** with dry road surfaces and manageable winds ({wind})."
-
-        # H. Swimming / Pool / Beach
-        if any(w in raw_q_lower for w in ["swim", "swimming", "pool", "beach", "तैराकी"]):
-            if "thunderstorm" in cond or is_raining:
-                if lang == "hi":
-                    return f"🏊 **आज {city} में आउटडोर स्विमिंग बिल्कुल न करें!**\n\n• **खतरा:** बिजली कड़कने (Lightning) और बारिश का जोखिम है। खुले पानी में बिजली गिरने का खतरा सबसे ज्यादा होता है।"
-                elif lang == "hinglish":
-                    return f"🏊 **Aaj outdoor swimming bilkul mat karein!** Thunderstorm aur lightning ke dauran open water mein jana jaanleva ho sakta hai."
-                return f"🏊 **Hazardous for outdoor swimming in {city} today!**\n\n• **Critical Hazard:** Active thunderstorm/lightning conditions present severe electrical conduction risks in open water. Remain indoors."
-            else:
-                if lang == "hi":
-                    return f"🏊 **हाँ, आज {city} में स्विमिंग के लिए मौसम अच्छा है!** तापमान **{temp}** है।"
-                elif lang == "hinglish":
-                    return f"🏊 **Haan, aaj swimming ke liye pleasant weather hai!** Temperature {temp} hai."
-                return f"🏊 **Favorable conditions for swimming in {city}!** Water and air temperatures are comfortable at **{temp}** with no convective lightning hazards."
-
-        # I. Lawn Mowing / Yard Maintenance
-        if any(w in raw_q_lower for w in ["lawn", "mow", "mowing", "grass", "घास"]):
-            if is_raining or (forecasts and forecasts[0].precipitation_probability_pct > 40):
-                if lang == "hi":
-                    return f"🚜 **आज {city} में घास (Lawn) न काटें!**\n\n• **कारण:** गीली घास काटने से मशीन जाम हो सकती है और घास की जड़ें उखड़ सकती हैं। घास पूरी तरह सूखने की प्रतीक्षा करें।"
-                elif lang == "hinglish":
-                    return f"🚜 **Aaj lawn mow mat karein!** Geeli ghaas katne se blades choke ho sakti hain aur lawn kharab ho sakta hai."
-                return f"🚜 **Skip lawn mowing in {city} today!**\n\n• **Reason:** Wet turf tears unevenly and clogs mower decks. Wait for a dry afternoon when grass blades are completely crisp and dry."
-            else:
-                if lang == "hi":
-                    return f"🚜 **हाँ, आज {city} में लॉन काटने के लिए उपयुक्त दिन है!** मौसम सूखा और साफ़ है।"
-                elif lang == "hinglish":
-                    return f"🚜 **Haan, aaj lawn mowing ke liye badhiya din hai!**"
-                return f"🚜 **Good day for lawn mowing in {city}!** Turf conditions are dry with clear skies."
-
-        # J. Home Ventilation / Open Windows
-        if any(w in raw_q_lower for w in ["window", "windows", "ventilate", "ventilation", "खिड़की"]):
-            if is_raining or wind_val > 35.0:
-                if lang == "hi":
-                    return f"🪟 **आज {city} में खिड़कियां बंद रखें!** बारिश की बौछारें और तेज हवा ({wind}) अंदर आ सकती हैं।"
-                elif lang == "hinglish":
-                    return f"🪟 **Khidkiyan band rakhein!** Barish aur hawa ({wind}) se paani andar aa sakta hai."
-                return f"🪟 **Keep windows closed in {city} right now!** Active rain and wind gusts ({wind}) will drive moisture indoors."
-            else:
-                if lang == "hi":
-                    return f"🪟 **हाँ, आज {city} में खिड़कियां खोलकर ताजी हवा ले सकते हैं!** तापमान **{temp}** और हवा {wind} की गति से चल रही है।"
-                elif lang == "hinglish":
-                    return f"🪟 **Haan, windows open karke fresh breeze enjoy kar sakte hain!**"
-                return f"🪟 **Great day to open windows and ventilate in {city}!** Pleasant temperatures at **{temp}** with gentle air circulation ({wind})."
-
-        # K. Solar Panel Generation
-        if any(w in raw_q_lower for w in ["solar", "panel", "generation", "सौर"]):
-            yield_pct = max(10, int(100 - (cloud_cover * 0.75)))
-            if lang == "hi":
-                return f"☀️ **{city} में सोलर पैनल दक्षता अनुमान:**\n\n• **बादल आवरण:** {cloud_cover:.0f}%\n• **अनुमानित उत्पादन:** सामान्य का **~{yield_pct}%**\n• { 'बादलों के कारण सोलर उत्पादन में गिरावट रहेगी।' if cloud_cover > 50 else 'साफ़ धूप के कारण सोलर जनरेशन उच्चतम स्तर पर रहेगा।' }"
-            elif lang == "hinglish":
-                return f"☀️ **Solar Power Generation Estimate for {city}:**\n\n• **Cloud Cover:** {cloud_cover:.0f}%\n• **Estimated Output:** **~{yield_pct}%** of peak capacity."
-            return f"☀️ **Solar Panel Generation Outlook for {city}:**\n\n• **Cloud Cover:** {cloud_cover:.0f}%\n• **Estimated Yield Efficiency:** **~{yield_pct}%** of nominal peak capacity.\n• Solar irradiance is {'reduced due to cloud attenuation.' if cloud_cover > 50 else 'optimal for peak photovoltaic generation.'}"
-
-        # L. Location Info Intent
-        if resolved_query.intent == CanonicalIntent.LOCATION_INFO:
-            if lang == "hi":
-                return f"आप अभी **{city}** का मौसम देख रहे हैं।"
-            elif lang == "hinglish":
-                return f"Aap abhi **{city}** ka mausam dekh rahe hain."
-            return f"You're currently viewing weather for **{city}**."
-
-        # M. Casual Conversation
-        if resolved_query.intent == CanonicalIntent.CASUAL_CONVERSATION:
-            if any(w in raw_q_lower for w in ["joke", "funny", "laugh"]):
-                return "Why did the cloud stay home from work? It was feeling a little under the weather! ☁️😄"
-            if any(w in raw_q_lower for w in ["thank", "thanks", "thx", "shukriya", "dhanyawad"]):
-                return "धन्यवाद! मौसम से जुड़ी कोई भी जानकारी चाहिए हो तो बेझिझक पूछें। 😊" if lang == "hi" else "You're very welcome! Always happy to help with meteorological insights. 😊"
-            if any(w in raw_q_lower for w in ["who are you", "who made you", "help"]):
-                return f"Hello! I am **WeatherGPT**, your intelligent AI meteorological assistant. I analyze real-time weather, NWP stability, commute safety, and outdoor planning for **{city}**."
-            return f"Hello! I'm doing great. How can I help you with weather, forecasts, or outdoor plans in **{city}** today?"
-
-        # N. Commute & Driving
-        if resolved_query.intent == CanonicalIntent.TRAVEL_WEATHER or any(w in raw_q_lower for w in ["drive", "driving", "commute", "road", "traffic", "travel", "trip"]):
-            if is_raining:
+        # 2. Travel, Commute & Driving
+        if resolved_query.intent == CanonicalIntent.TRAVEL_WEATHER or _has_kw(["drive", "driving", "commute", "road", "traffic", "travel", "trip", "ଯାତ୍ରା", "यात्रा", "बाहर निकलना"]):
+            if is_future and target_fc:
+                rain_prob = target_fc.precipitation_probability_pct
+                is_fc_rain = rain_prob >= 40 or "rain" in target_fc.weather_description.lower() or "thunderstorm" in target_fc.weather_description.lower()
+                if is_fc_rain:
+                    if lang == "hi":
+                        return f"🚗 **{date_label_hi} {city} में यात्रा / ड्राइव करते समय सावधानी बरतें!**\n\n• **पूर्वानुमान:** {target_fc.weather_description} (बारिश का जोखिम: **{rain_prob}%**)\n• **तापमान:** अधिकतम **{target_fc.temp_max_c:.0f}°C** / न्यूनतम **{target_fc.temp_min_c:.0f}°C**\n• **सलाह:** बारिश और गीली सड़कों के कारण यात्रा में अतिरिक्त समय लेकर चलें।"
+                    elif lang == "hinglish":
+                        return f"🚗 **{date_label_hinglish} {city} mein travel/commute karte waqt precaution rakhein!**\n\n• **Forecast:** {target_fc.weather_description} (Rain chance: **{rain_prob}%**)\n• **Temp:** High **{target_fc.temp_max_c:.0f}°C** / Low **{target_fc.temp_min_c:.0f}°C**\n• Roads slippery ho sakti hain, safe drive karein."
+                    elif lang == "or":
+                        return f"🚗 **{date_label_or} {city} ରେ ଯାତ୍ରା / ଡ୍ରାଇଭ୍ କରିବା ସମୟରେ ସତର୍କ ରୁହନ୍ତୁ!**\n\n• **ପୂର୍ବାନୁମାନ:** {target_fc.weather_description} (ବର୍ଷା ସମ୍ଭାବନା: **{rain_prob}%**)\n• **ତାପମାତ୍ରା:** ସର୍ବାଧିକ **{target_fc.temp_max_c:.0f}°C** / ସର୍ବନିମ୍ନ **{target_fc.temp_min_c:.0f}°C**\n• ବର୍ଷା ହେବାର ଆଶଙ୍କା ଥିବାରୁ ଯାତ୍ରା ପାଇଁ ଅତିରିକ୍ତ ସମୟ ରଖନ୍ତୁ।"
+                    return f"🚗 **Exercise caution when travelling or commuting in {city} {date_label_en}!**\n\n• **Forecast:** **{target_fc.weather_description}** with **{rain_prob}% chance of rain** ({target_fc.precipitation_sum_mm:.1f} mm).\n• **Temperatures:** High **{target_fc.temp_max_c:.0f}°C** / Low **{target_fc.temp_min_c:.0f}°C**.\n• **Road Guidance:** Wet road surfaces and reduced tire traction expected. Allow extra travel time."
+                else:
+                    if lang == "hi":
+                        return f"🚗 **हाँ, {date_label_hi} {city} में यात्रा और ड्राइव करना पूरी तरह सुरक्षित रहेगा!**\n\n• **पूर्वानुमान:** {target_fc.weather_description}\n• **तापमान:** अधिकतम **{target_fc.temp_max_c:.0f}°C** / न्यूनतम **{target_fc.temp_min_c:.0f}°C**\n• **बारिश का जोखिम:** कम ({rain_prob}%)\n• सड़कें सूखी रहेंगी और यातायात सुगम रहेगा।"
+                    elif lang == "hinglish":
+                        return f"🚗 **Haan, {date_label_hinglish} {city} mein travel aur drive karna bilkul safe rahega!**\n\n• **Forecast:** {target_fc.weather_description}\n• **Temp:** High **{target_fc.temp_max_c:.0f}°C** / Low **{target_fc.temp_min_c:.0f}°C**\n• **Rain Risk:** Low ({rain_prob}%)\n• Dry roads aur comfortable travel conditions rahengi."
+                    elif lang == "or":
+                        return f"🚗 **ହଁ, {date_label_or} {city} ରେ ଯାତ୍ରା ଓ ଡ୍ରାଇଭ୍ କରିବା ସମ୍ପୂର୍ଣ୍ଣ ସୁରକ୍ଷିତ ରହିବ!**\n\n• **ପୂର୍ବାନୁମାନ:** {target_fc.weather_description}\n• **ତାପମାତ୍ରା:** ସର୍ବାଧିକ **{target_fc.temp_max_c:.0f}°C** / ସର୍ବନିମ୍ନ **{target_fc.temp_min_c:.0f}°C**\n• **ବର୍ଷା ସମ୍ଭାବନା:** କମ୍ ({rain_prob}%)\n• ରାସ୍ତା ଶୁଖିଲା ରହିବ ଏବଂ ଯାତ୍ରା ପାଇଁ ଅନୁକୂଳ ପରିସ୍ଥିତି ରହିବ।"
+                    return f"🚗 **Yes, it is expected to be safe to travel and commute in {city} {date_label_en}!**\n\n• **Forecast:** **{target_fc.weather_description}**\n• **Temperatures:** High **{target_fc.temp_max_c:.0f}°C** / Low **{target_fc.temp_min_c:.0f}°C**\n• **Rain Risk:** Low ({rain_prob}%)\n• **Wind Speed:** Peak {target_fc.max_wind_speed_kmh:.0f} km/h with dry, clear road conditions."
+            elif is_raining:
                 if lang == "hi":
                     return f"🚗 **{city} में अभी ड्राइव करते समय सावधानी बरतें!**\n\n• सक्रिय बारिश ({precip:.1f} mm/h) और {cond} के कारण सड़कों पर फिसलन है।\n• हेडलाइट्स जलाएं, आगे वाले वाहन से सुरक्षित दूरी रखें और 10-15 मिनट अतिरिक्त समय लेकर चलें।"
                 elif lang == "hinglish":
@@ -464,86 +495,360 @@ Instructions:
                 return f"🚗 **Exercise caution while driving or commuting in {city} right now!**\n\n• Active rain ({precip:.1f} mm/h) and **{cond}** skies reduce tire traction.\n• Maintain safe following distances, switch on low-beam headlights, and allow 10–15 extra minutes for your commute."
             else:
                 if lang == "hi":
-                    return f"🚗 **हाँ, अभी {city} में ड्राइव करना और यात्रा करना पूरी तरह सुरक्षित है!**\n\n• मौसम साफ़ है ({temp}), सड़कें सूखी हैं और दृश्यता {visibility} है।"
+                    return f"🚗 **हाँ, अभी {city} में बाहर निकलना और ड्राइव करना पूरी तरह सुरक्षित है!**\n\n• मौसम साफ़ है ({temp}), सड़कें सूखी हैं और दृश्यता {visibility} है।"
                 elif lang == "hinglish":
                     return f"🚗 **Haan, abhi {city} mein drive karna bilkul safe hai!** Mausam saaf hai ({temp}) aur visibility {visibility} hai."
+                elif lang == "or":
+                    return f"🚗 **ହଁ, ବର୍ତ୍ତମାନ {city} ରେ ଯାତ୍ରା ଓ ଡ୍ରାଇଭ୍ କରିବା ସୁରକ୍ଷିତ ଅଛି!**\n\n• ପାଣିପାଗ ପରିଷ୍କାର ଅଛି ({temp}), ରାସ୍ତା ଶୁଖିଲା ଏବଂ ଦୃଶ୍ୟମାନତା {visibility} ଅଛି।"
                 return f"🚗 **Yes, it is safe to drive and commute in {city} right now!**\n\n• Skies are **{cond}** with dry road conditions, clear visibility ({visibility}), and comfortable temperatures (**{temp}**)."
 
-        # O. Walk / Workout / Running
-        if resolved_query.intent == CanonicalIntent.OUTDOOR_ACTIVITY or any(w in raw_q_lower for w in ["walk", "workout", "run", "running", "jog", "exercise", "fitness", "cricket"]):
-            if any(w in raw_q_lower for w in ["cricket"]):
-                if is_raining:
-                    return f"🏏 Not suitable for cricket in **{city}** right now — rain is active ({temp}) and the pitch/outfield will be wet."
-                return f"🏏 Great conditions for cricket in **{city}**! Temperature is **{temp}** with {cond} skies."
+        # 3. Walk / Workout / Running
+        if resolved_query.intent == CanonicalIntent.OUTDOOR_ACTIVITY or _has_kw(["walk", "workout", "run", "running", "jog", "exercise", "fitness", "cricket", "वॉक", "कसरत", "दौड़"]):
+            disp_temp_range = f"{target_fc.temp_max_c:.0f}°C / {target_fc.temp_min_c:.0f}°C" if target_fc else temp
+            disp_cond = target_fc.weather_description if target_fc else cond
+            if _has_kw(["cricket", "क्रिकेट"]):
+                if is_raining or (is_future and target_fc and target_fc.precipitation_probability_pct > 50):
+                    return f"🏏 Not suitable for cricket in **{city}** {date_label_en} — rain risk is high ({target_fc.precipitation_probability_pct if target_fc else 60}%) and the outfield will be wet."
+                return f"🏏 Great conditions for cricket in **{city}** {date_label_en}! Temperature is around **{disp_temp_range}** with {disp_cond} skies."
             if lang == "hi":
-                return f"🏃 **आज {city} में वॉक या कसरत के लिए सबसे अच्छा समय:**\n\n• **सर्वोत्तम समय:** **सुबह (6:00 AM – 8:30 AM)** या **शाम (5:30 PM – 7:30 PM)**\n• **वर्तमान स्थिति:** तापमान **{temp}** (अहसास: {feels_like}), आर्द्रता **{humid:.0f}%**, हवा **{wind}**\n• **सलाह:** {'दोपहर की धूप से बचें और पर्याप्त पानी पिएं।' if temp_val > 28 else 'मौसम बाहरी कसरत के लिए अनुकूल है।'}"
+                return f"🏃 **{date_label_hi} {city} में वॉक या कसरत के लिए सबसे अच्छा समय:**\n\n• **सर्वोत्तम समय:** **सुबह (6:00 AM – 8:30 AM)** या **शाम (5:30 PM – 7:30 PM)**\n• **पूर्वानुमान:** तापमान **{disp_temp_range}**, मौसम {disp_cond}\n• **सलाह:** पर्याप्त पानी पिएं और दोपहर की सीधी धूप से बचें।"
             elif lang == "hinglish":
-                return f"🏃 **Aaj {city} mein walk ya workout ke liye best time:**\n\n• **Optimal Windows:** **Morning (6:00 AM – 8:30 AM)** ya **Evening (5:30 PM – 7:30 PM)**\n• **Telemetry:** Temp **{temp}**, Humidity **{humid:.0f}%**, Wind **{wind}**."
-            return f"🏃 **Best time for a walk or outdoor workout in {city} today:**\n\n• **Optimal Windows:** **Early Morning (6:00 AM – 8:30 AM)** or **Late Evening (5:30 PM – 7:30 PM)**\n• **Current Telemetry:** Temperature **{temp}** (Feels like: {feels_like}), humidity **{humid:.0f}%**, wind **{wind}**.\n• **Recommendation:** {'Stay well-hydrated and avoid peak midday solar heat.' if temp_val > 28 else 'Weather is favorable for outdoor fitness and walking.'}"
+                return f"🏃 **{date_label_hinglish} {city} mein walk ya workout ke liye best time:**\n\n• **Optimal Windows:** **Morning (6:00 AM – 8:30 AM)** ya **Evening (5:30 PM – 7:30 PM)**\n• **Forecast:** Temp **{disp_temp_range}**, skies {disp_cond}."
+            return f"🏃 **Best time for a walk or outdoor workout in {city} {date_label_en}:**\n\n• **Optimal Windows:** **Early Morning (6:00 AM – 8:30 AM)** or **Late Evening (5:30 PM – 7:30 PM)**\n• **Forecast:** High/Low **{disp_temp_range}**, condition: {disp_cond}.\n• **Recommendation:** Stay well-hydrated and avoid peak midday heat."
 
-        # P. Gardening & Plant Watering
-        if resolved_query.intent == CanonicalIntent.AGRO_ADVISORY or any(w in raw_q_lower for w in ["garden", "gardening", "plant", "plants", "water", "watering", "crop", "spray"]):
-            if any(w in raw_q_lower for w in ["spray", "pesticide", "fertilizer"]):
-                if is_raining:
-                    return f"🌧️ **Hold off on spraying chemicals in {city} today!** Rain ({precip:.1f} mm/h) will wash away applied treatments."
-                return f"✅ **Suitable window for spraying in {city} today!** Skies are dry ({temp}), wind is gentle ({wind})."
-            if is_raining or (forecasts and forecasts[0].precipitation_probability_pct > 50):
-                rain_pct = forecasts[0].precipitation_probability_pct if forecasts else 75
+        # 4. Outfit & Clothing
+        if resolved_query.intent == CanonicalIntent.OUTFIT_RECOMMENDATION or _has_kw(["wear", "wearing", "clothes", "jacket", "outfit", "पहनना", "कपड़े"]):
+            effective_temp = target_fc.temp_max_c if (is_future and target_fc) else temp_val
+            effective_rain = (target_fc.precipitation_probability_pct > 40) if (is_future and target_fc) else is_raining
+            if effective_rain:
                 if lang == "hi":
-                    return f"🌱 **आज {city} में पौधों को पानी देने की आवश्यकता नहीं है!**\n\n• बारिश की संभावना सक्रिय है ({rain_pct}%), जिससे मिट्टी में प्राकृतिक नमी बनी रहेगी।\n• अतिरिक्त पानी से जड़ों में पानी भरने (waterlogging) का जोखिम हो सकता है।"
-                elif lang == "hinglish":
-                    return f"🌱 **Aaj {city} mein paudho ko paani mat daalo!** Rain chances {rain_pct}% hain jisse soil naturally moist rahegi."
-                return f"🌱 **Hold off on outdoor watering in {city} today!**\n\n• Rain is active or expected ({rain_pct}% chance), providing natural soil hydration.\n• Additional watering risks over-saturating the roots."
+                    return f"🧥 **{city} के लिए पहनावा सलाह ({date_label_hi}):** बारिश की संभावना है। **वाटरप्रूफ जैकेट या रेनकोट** पहनें और **छाता** साथ रखें! 🌧️"
+                return f"🧥 **Outfit tip for {city} ({date_label_en}):** Rain is active or expected. Wear a **waterproof jacket or raincoat** and keep an **umbrella** handy! 🌧️"
+            elif effective_temp < 18.0:
+                if lang == "hi":
+                    return f"🧥 **{city} के लिए पहनावा सलाह ({date_label_hi}):** मौसम ठंडा रहेगा (**{effective_temp:.0f}°C**)। **हल्का स्वेटर, हुडी या जैकेट** पहनना आरामदायक रहेगा! ❄️"
+                return f"🧥 **Outfit tip for {city} ({date_label_en}):** It will be cool at **{effective_temp:.0f}°C**. A **sweater, warm hoodie, or jacket** will keep you comfortable! ❄️"
+            elif effective_temp <= 30.0:
+                if lang == "hi":
+                    return f"👕 **{city} के लिए पहनावा सलाह ({date_label_hi}):** मौसम सुहावना है (**{effective_temp:.0f}°C**)। **हल्के सूती कपड़े या कैजुअल परिधान** सबसे उपयुक्त रहेंगे! 🌤️"
+                return f"👕 **Outfit tip for {city} ({date_label_en}):** Pleasant weather (**{effective_temp:.0f}°C**). Standard **breathable cotton clothes or casual wear** are ideal! 🌤️"
             else:
                 if lang == "hi":
-                    return f"🌱 **हाँ, आज {city} में पौधों को पानी देने के लिए अच्छा दिन है!** सुबह या शाम के समय पानी दें। तापमान **{temp}** है।"
-                elif lang == "hinglish":
-                    return f"🌱 **Haan, aaj {city} mein paudho ko paani dene ke liye accha din hai!** Morning ya evening mein dalein."
-                return f"🌱 **Yes, today is a good day for gardening and watering plants in {city}!**\n\n• Water during early morning or late afternoon to minimize evaporation. Current temperature is **{temp}** with **{humid:.0f}%** humidity."
+                    return f"👕 **{city} के लिए पहनावा सलाह ({date_label_hi}):** तापमान गर्म रहेगा (**{effective_temp:.0f}°C**)। **ढीले, हल्के सूती (cotton) कपड़े** पहनें, धूप का चश्मा लगाएं और पर्याप्त पानी पिएं! ☀️"
+                return f"👕 **Outfit tip for {city} ({date_label_en}):** It's warm (**{effective_temp:.0f}°C**). Wear **lightweight, loose cotton clothing**, wear sunglasses for sun protection, and stay hydrated! ☀️"
 
-        # Q. Weekend & Multi-Day Forecast
-        if resolved_query.intent == CanonicalIntent.WEATHER_FORECAST or any(w in raw_q_lower for w in ["weekend", "tomorrow", "forecast", "upcoming", "week"]):
+        # 5. Gardening & Plant Watering
+        if resolved_query.intent == CanonicalIntent.AGRO_ADVISORY or _has_kw(["garden", "gardening", "plant", "plants", "water", "watering", "crop", "spray", "पौधों", "फसलों", "पानी देना", "छिड़काव"]):
+            if _has_kw(["spray", "pesticide", "fertilizer", "छिड़कना", "छिड़काव"]):
+                if is_raining or (is_future and target_fc and target_fc.precipitation_probability_pct > 40):
+                    if lang == "hi":
+                        return f"🌧️ **{date_label_hi} {city} में फसलों/पौधों पर कीटनाशक का छिड़काव न करें!**\n\n• बारिश की संभावना ({target_fc.precipitation_probability_pct if target_fc else 60}%) दवा को बहा देगी।"
+                    return f"🌧️ **Hold off on spraying chemicals in {city} {date_label_en}!** Rain risk ({target_fc.precipitation_probability_pct if target_fc else 60}%) will wash away applied treatments."
+                if lang == "hi":
+                    return f"✅ **{date_label_hi} {city} में छिड़काव के लिए अनुकूल समय है!** मौसम सूखा है और हवा शांत है।"
+                return f"✅ **Suitable window for spraying in {city} {date_label_en}!** Skies are dry, wind is manageable."
+            if is_raining or (is_future and target_fc and target_fc.precipitation_probability_pct > 50):
+                rain_pct = target_fc.precipitation_probability_pct if target_fc else 75
+                if lang == "hi":
+                    return f"🌱 **{date_label_hi} {city} में पौधों को पानी देने की आवश्यकता नहीं है!**\n\n• बारिश की संभावना सक्रिय है ({rain_pct}%), जिससे मिट्टी में प्राकृतिक नमी बनी रहेगी।"
+                elif lang == "hinglish":
+                    return f"🌱 **{date_label_hinglish} {city} mein paudho ko paani mat daalo!** Rain chances {rain_pct}% hain jisse soil naturally moist rahegi."
+                return f"🌱 **Hold off on outdoor watering in {city} {date_label_en}!**\n\n• Rain is expected ({rain_pct}% chance), providing natural soil hydration."
+            else:
+                if lang == "hi":
+                    return f"🌱 **हाँ, {date_label_hi} {city} में पौधों को पानी देने के लिए अच्छा दिन है!**\n\n• वाष्पीकरण से बचने के लिए सुबह जल्दी या शाम के समय पानी दें।"
+                elif lang == "hinglish":
+                    return f"🌱 **Haan, {date_label_hinglish} {city} mein paudho ko paani dene ke liye accha din hai!** Morning ya evening mein dalein."
+                return f"🌱 **Yes, {date_label_en} is a good day for gardening and watering plants in {city}!**\n\n• Water during early morning or late afternoon to minimize evaporation."
+
+        # 6. Weekend & Multi-Day Forecast Window Analysis
+        if resolved_query.intent == CanonicalIntent.WEATHER_FORECAST or _has_kw(["weekend", "tomorrow", "forecast", "upcoming", "week", "next", "days", "वीकेंड", "पूर्वानुमान", "कल", "ପୂର୍ବାନୁମାନ", "आने वाले दिन"]):
+            def _get_fc_icon(desc: str) -> str:
+                d = desc.lower()
+                if "thunder" in d or "lightning" in d:
+                    return "⛈️"
+                elif "rain" in d or "shower" in d:
+                    return "🌧️"
+                elif "drizzle" in d:
+                    return "🌦️"
+                elif "cloud" in d or "overcast" in d:
+                    return "☁️"
+                elif "snow" in d or "ice" in d:
+                    return "❄️"
+                elif "fog" in d or "mist" in d:
+                    return "🌫️"
+                elif "clear" in d or "sun" in d:
+                    return "☀️"
+                return "🌤️"
+
+            def _day_name(fc_date_str: str, target_lang: str) -> str:
+                try:
+                    dt = datetime.strptime(fc_date_str, "%Y-%m-%d")
+                    dow = dt.weekday()
+                    en_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    hi_days = ["सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार", "रविवार"]
+                    or_days = ["ସୋମବାର", "ମଙ୍ଗଳବାର", "ବୁଧବାର", "ଗୁରୁବାର", "ଶୁକ୍ରବାର", "ଶନିବାର", "ରବିବାର"]
+                    if target_lang == "hi":
+                        return f"{hi_days[dow]} ({fc_date_str})"
+                    elif target_lang == "or":
+                        return f"{or_days[dow]} ({fc_date_str})"
+                    return f"{en_days[dow]} ({fc_date_str})"
+                except Exception:
+                    return fc_date_str
+
+            # A. Weekend Forecast Analysis
             if time_ref == "weekend" and forecasts and len(forecasts) >= 2:
                 sat = forecasts[min(len(forecasts)-2, 1)]
                 sun = forecasts[min(len(forecasts)-1, 2)]
+                sat_icon = _get_fc_icon(sat.weather_description)
+                sun_icon = _get_fc_icon(sun.weather_description)
+                sat_dow = _day_name(sat.date, lang)
+                sun_dow = _day_name(sun.date, lang)
+                weekend_rain = max(sat.precipitation_probability_pct, sun.precipitation_probability_pct)
+
                 if lang == "hi":
-                    return f"📅 **इस वीकेंड {city} का मौसम पूर्वानुमान:**\n\n• **शनिवार:** {sat.weather_description} · तापमान **{sat.temp_max_c:.0f}°C / {sat.temp_min_c:.0f}°C** · बारिश: **{sat.precipitation_probability_pct}%**\n• **रविवार:** {sun.weather_description} · तापमान **{sun.temp_max_c:.0f}°C / {sun.temp_min_c:.0f}°C** · बारिश: **{sun.precipitation_probability_pct}%**\n\nवीकेंड योजनाओं के लिए मौसम अनुकूल रहेगा!"
+                    rain_advice = "दोपहर बाद गरज-चमक/हल्की बारिश का जोखिम है, इसलिए छाता साथ रखें।" if weekend_rain >= 40 else "मौसम सूखा व गतिविधियों के लिए अनुकूल रहेगा।"
+                    return (
+                        f"📅 **{city} वीकेंड मौसम का विस्तृत विश्लेषण:**\n\n"
+                        f"📊 **शनिवार व रविवार का पूर्वानुमान:**\n"
+                        f"• **{sat_dow}:** {sat_icon} **{sat.weather_description}** · अधिकतम **{sat.temp_max_c:.0f}°C** / न्यूनतम **{sat.temp_min_c:.0f}°C** · बारिश का जोखिम: **{sat.precipitation_probability_pct}%** (~{sat.precipitation_sum_mm:.1f} mm) · हवा: {sat.max_wind_speed_kmh:.0f} km/h\n"
+                        f"• **{sun_dow}:** {sun_icon} **{sun.weather_description}** · अधिकतम **{sun.temp_max_c:.0f}°C** / न्यूनतम **{sun.temp_min_c:.0f}°C** · बारिश का जोखिम: **{sun.precipitation_probability_pct}%** (~{sun.precipitation_sum_mm:.1f} mm) · हवा: {sun.max_wind_speed_kmh:.0f} km/h\n\n"
+                        f"💡 **योजना व सुझाव:**\n"
+                        f"• **आउटडोर प्लान:** {rain_advice}\n"
+                        f"• **तापमान:** दिन में गर्माहट (32°C–33°C) रहेगी। सुबह 6:00–9:00 AM का समय आउटडोर वर्कआउट व यात्रा के लिए सर्वोत्तम है।"
+                    )
                 elif lang == "hinglish":
-                    return f"📅 **Is weekend {city} ka forecast:**\n\n• **Saturday:** {sat.weather_description} · Temp **{sat.temp_max_c:.0f}°C/{sat.temp_min_c:.0f}°C** · Rain: **{sat.precipitation_probability_pct}%**\n• **Sunday:** {sun.weather_description} · Temp **{sun.temp_max_c:.0f}°C/{sun.temp_min_c:.0f}°C** · Rain: **{sun.precipitation_probability_pct}%**"
-                return f"📅 **Weekend Weather Outlook for {city}:**\n\n• **Saturday:** {sat.weather_description} · High/Low: **{sat.temp_max_c:.0f}°C / {sat.temp_min_c:.0f}°C** · Rain Risk: **{sat.precipitation_probability_pct}%**\n• **Sunday:** {sun.weather_description} · High/Low: **{sun.temp_max_c:.0f}°C / {sun.temp_min_c:.0f}°C** · Rain Risk: **{sun.precipitation_probability_pct}%**\n\nPlan your outdoor activities accordingly!"
-            elif time_ref == "tomorrow" and fc_tomorrow:
-                return f"📅 **Tomorrow's Forecast for {city}:**\n\n• Expected: **{fc_tomorrow.weather_description}**\n• High/Low: **{fc_tomorrow.temp_max_c:.1f}°C / {fc_tomorrow.temp_min_c:.1f}°C**\n• Rain Risk: **{fc_tomorrow.precipitation_probability_pct}%** ({fc_tomorrow.precipitation_sum_mm:.1f} mm)\n• Max Wind: **{fc_tomorrow.max_wind_speed_kmh:.0f} km/h**"
+                    rain_advice = "Afternoon mein rain chances hain, umbrella saath carry karein." if weekend_rain >= 40 else "Mausam mostly clear aur activities ke liye safe rahega."
+                    return (
+                        f"📅 **{city} Weekend Weather Analysis & Outlook:**\n\n"
+                        f"📊 **Weekend Breakdown:**\n"
+                        f"• **{sat_dow}:** {sat_icon} **{sat.weather_description}** · High **{sat.temp_max_c:.0f}°C** / Low **{sat.temp_min_c:.0f}°C** · Rain Risk: **{sat.precipitation_probability_pct}%** (~{sat.precipitation_sum_mm:.1f} mm)\n"
+                        f"• **{sun_dow}:** {sun_icon} **{sun.weather_description}** · High **{sun.temp_max_c:.0f}°C** / Low **{sun.temp_min_c:.0f}°C** · Rain Risk: **{sun.precipitation_probability_pct}%** (~{sun.precipitation_sum_mm:.1f} mm)\n\n"
+                        f"💡 **Practical Tips:**\n"
+                        f"• **Outdoors & Travel:** {rain_advice}\n"
+                        f"• **Comfort:** Day temperature warm rahega (32°C–33°C). Light cotton wear karein."
+                    )
+                elif lang == "or":
+                    return (
+                        f"📅 **{city} ପାଇଁ ୱିକେଣ୍ଡ୍ (ଶନିବାର ଓ ରବିବାର) ପାଣିପାଗ ବିଶ୍ଳେଷଣ:**\n\n"
+                        f"📊 **ଦୈନିକ ପୂର୍ବାନୁମାନ:**\n"
+                        f"• **{sat_dow}:** {sat_icon} **{sat.weather_description}** · ସର୍ବାଧିକ **{sat.temp_max_c:.0f}°C** / ସର୍ବନିମ୍ନ **{sat.temp_min_c:.0f}°C** · ବର୍ଷା ଆଶଙ୍କା: **{sat.precipitation_probability_pct}%** (~{sat.precipitation_sum_mm:.1f} mm)\n"
+                        f"• **{sun_dow}:** {sun_icon} **{sun.weather_description}** · ସର୍ବାଧିକ **{sun.temp_max_c:.0f}°C** / ସର୍ବନିମ୍ନ **{sun.temp_min_c:.0f}°C** · ବର୍ଷା ଆଶଙ୍କା: **{sun.precipitation_probability_pct}%** (~{sun.precipitation_sum_mm:.1f} mm)\n\n"
+                        f"💡 **ସତର୍କତା ଓ ପରାମର୍ଶ:**\n"
+                        f"• ବାହାରକୁ ଯିବା ସମୟରେ ଛତା ସାଙ୍ଗରେ ରଖନ୍ତୁ ଏବଂ ସକାଳ ସମୟ ଭ୍ରମଣ ପାଇଁ ଅନୁକୂଳ ଅଟେ।"
+                    )
+                return (
+                    f"📅 **Weekend Weather Outlook & Analysis for {city}:**\n\n"
+                    f"📊 **Weekend Synoptic Breakdown:**\n"
+                    f"• **{sat_dow}:** {sat_icon} **{sat.weather_description}** · High **{sat.temp_max_c:.0f}°C** / Low **{sat.temp_min_c:.0f}°C** · Rain Risk: **{sat.precipitation_probability_pct}%** (~{sat.precipitation_sum_mm:.1f} mm) · Wind: {sat.max_wind_speed_kmh:.0f} km/h\n"
+                    f"• **{sun_dow}:** {sun_icon} **{sun.weather_description}** · High **{sun.temp_max_c:.0f}°C** / Low **{sun.temp_min_c:.0f}°C** · Rain Risk: **{sun.precipitation_probability_pct}%** (~{sun.precipitation_sum_mm:.1f} mm) · Wind: {sun.max_wind_speed_kmh:.0f} km/h\n\n"
+                    f"💡 **Meteorological Guidance:**\n"
+                    f"• **Outdoor Activities & Travel:** {'Scattered precipitation expected; carry an umbrella and plan outdoor events during morning hours.' if weekend_rain >= 40 else 'Dry and favorable conditions for outdoor recreation and travel.'}\n"
+                    f"• **Thermal Comfort:** Warm daytime highs around 32°C–33°C. Stay hydrated and opt for breathable cotton clothing."
+                )
+
+            # B. Specific Target Date Forecast Analysis (e.g. tomorrow, 6th sept, Sunday)
+            elif is_future and target_fc:
+                target_icon = _get_fc_icon(target_fc.weather_description)
+                target_day_str = _day_name(target_fc.date, lang)
+                rain_prob = target_fc.precipitation_probability_pct
+                rain_mm = target_fc.precipitation_sum_mm
+                is_fc_rain = rain_prob >= 40 or "rain" in target_fc.weather_description.lower() or "thunderstorm" in target_fc.weather_description.lower()
+
+                if lang == "hi":
+                    return (
+                        f"📅 **{city} के लिए मौसम पूर्वानुमान व विश्लेषण ({date_label_hi} - {target_day_str}):**\n\n"
+                        f"• **आसमान व स्थिति:** {target_icon} **{target_fc.weather_description}**\n"
+                        f"• **तापमान सीमा:** अधिकतम **{target_fc.temp_max_c:.1f}°C** / न्यूनतम **{target_fc.temp_min_c:.1f}°C**\n"
+                        f"• **बारिश की संभावना:** **{rain_prob}%** (अनुमानित मात्रा: ~{rain_mm:.1f} mm)\n"
+                        f"• **हवा की गति:** अधिकतम **{target_fc.max_wind_speed_kmh:.0f} km/h**\n\n"
+                        f"🔍 **मौसम प्रभाव व सुझाव:**\n"
+                        f"• **यात्रा व आवागमन:** {'गीली सड़कों और बारिश के कारण यात्रा में सावधानी बरतें व छाता साथ रखें।' if is_fc_rain else 'सड़कें सूखी रहेंगी और यातायात सुगम रहेगा।'}\n"
+                        f"• **पहनावा:** {'हल्का वाटरप्रूफ जैकेट या सूती कपड़े उपयुक्त रहेंगे।' if is_fc_rain else 'हल्के, आरामदायक सूती कपड़े पहनें।'}"
+                    )
+                elif lang == "hinglish":
+                    return (
+                        f"📅 **{city} Forecast & Detailed Analysis ({date_label_hinglish} - {target_day_str}):**\n\n"
+                        f"• **Expected Weather:** {target_icon} **{target_fc.weather_description}**\n"
+                        f"• **Thermal Range:** High **{target_fc.temp_max_c:.1f}°C** / Low **{target_fc.temp_min_c:.1f}°C**\n"
+                        f"• **Rain Probability:** **{rain_prob}%** (~{rain_mm:.1f} mm rainfall)\n"
+                        f"• **Max Wind Speed:** **{target_fc.max_wind_speed_kmh:.0f} km/h**\n\n"
+                        f"🔍 **Key Insights:**\n"
+                        f"• **Commute & Outdoor:** {'Barish ka risk hai, umbrella zaroor saath rakhein aur safe drive karein.' if is_fc_rain else 'Dry conditions expected, travel aur outdoor plans ke liye safe din hai.'}"
+                    )
+                elif lang == "or":
+                    return (
+                        f"📅 **{city} ର ପାଣିପାଗ ବିଶ୍ଳେଷଣ ({date_label_or} - {target_day_str}):**\n\n"
+                        f"• **ଆକାଶ ଓ ପାଣିପାଗ:** {target_icon} **{target_fc.weather_description}**\n"
+                        f"• **ତାପମାତ୍ରା:** ସର୍ବାଧିକ **{target_fc.temp_max_c:.1f}°C** / ସର୍ବନିମ୍ନ **{target_fc.temp_min_c:.1f}°C**\n"
+                        f"• **ବର୍ଷା ସମ୍ଭାବନା:** **{rain_prob}%** (~{rain_mm:.1f} mm)\n"
+                        f"• **ପବନର ଗତି:** ସର୍ବାଧିକ **{target_fc.max_wind_speed_kmh:.0f} km/h**\n\n"
+                        f"🔍 **ପରାମର୍ଶ:**\n"
+                        f"• {'ବର୍ଷା ହେବାର ଆଶଙ୍କା ଥିବାରୁ ଛତା ସାଙ୍ଗରେ ନିଅନ୍ତୁ ଏବଂ ଯାତ୍ରା ସମୟରେ ସତର୍କ ରୁହନ୍ତୁ।' if is_fc_rain else 'ଯାତ୍ରା ଓ ବାହ୍ୟ କାର୍ଯ୍ୟକଳାପ ପାଇଁ ପାଣିପାଗ ଅନୁକୂଳ ରହିବ।'}"
+                    )
+                return (
+                    f"📅 **Meteorological Analysis for {city} ({date_label_en.capitalize()} - {target_day_str}):**\n\n"
+                    f"• **Sky Condition:** {target_icon} **{target_fc.weather_description}**\n"
+                    f"• **Thermal Range:** High **{target_fc.temp_max_c:.1f}°C** / Low **{target_fc.temp_min_c:.1f}°C**\n"
+                    f"• **Precipitation Dynamics:** **{rain_prob}% Rain Probability** (~{rain_mm:.1f} mm expected)\n"
+                    f"• **Peak Wind Speed:** **{target_fc.max_wind_speed_kmh:.0f} km/h**\n\n"
+                    f"🔍 **Impact Analysis & Guidance:**\n"
+                    f"• **Travel & Commute:** {'Wet asphalt and reduced braking traction expected. Allow extra transit time and carry an umbrella.' if is_fc_rain else 'Dry roads and clear driving conditions expected throughout the day.'}\n"
+                    f"• **Outdoor Activities:** {'Plan outdoor workouts during morning windows to avoid midday convective precipitation.' if is_fc_rain else 'Excellent day for outdoor workouts and leisure activities.'}"
+                )
+
+            # C. Multi-Day / 7-Day Forecast Window Comprehensive Analysis
             elif forecasts:
-                lines = [f"• **{fc.date}:** {fc.weather_description} · {fc.temp_max_c:.0f}°C/{fc.temp_min_c:.0f}°C · Rain: {fc.precipitation_probability_pct}%" for fc in forecasts[:4]]
-                return f"📅 **Upcoming 4-Day Forecast for {city}:**\n\n" + "\n".join(lines)
+                count = min(len(forecasts), 7)
+                window_fcs = forecasts[:count]
+                high_temps = [f.temp_max_c for f in window_fcs]
+                low_temps = [f.temp_min_c for f in window_fcs]
+                max_high = max(high_temps)
+                min_low = min(low_temps)
+                rainy_days_count = sum(1 for f in window_fcs if f.precipitation_probability_pct >= 40 or "rain" in f.weather_description.lower() or "thunder" in f.weather_description.lower())
+                total_rain = sum(f.precipitation_sum_mm for f in window_fcs)
+                peak_wind = max(f.max_wind_speed_kmh for f in window_fcs)
+
+                if lang == "hi":
+                    lines = [f"• **{_day_name(fc.date, 'hi')}:** {_get_fc_icon(fc.weather_description)} {fc.weather_description} · अधिकतम **{fc.temp_max_c:.0f}°C** / न्यूनतम **{fc.temp_min_c:.0f}°C** · बारिश: **{fc.precipitation_probability_pct}%** (~{fc.precipitation_sum_mm:.1f} mm)" for fc in window_fcs]
+                    breakdown_str = "\n".join(lines)
+                    return (
+                        f"📅 **{city} के लिए {count}-दिवसीय विस्तृत मौसम पूर्वानुमान व विश्लेषण:**\n\n"
+                        f"📊 **वायुमंडलीय रुझान विश्लेषण (Trend Overview):**\n"
+                        f"• **तापमान सीमा:** अधिकतम **{max_high:.0f}°C** और न्यूनतम **{min_low:.0f}°C** के बीच तापमान रहेगा।\n"
+                        f"• **वर्षा पैटर्न:** {count} में से **{rainy_days_count} दिन** बारिश/गरज-चमक का जोखिम ($\ge 40\%$) है। कुल अनुमानित बारिश: **~{total_rain:.1f} mm**।\n"
+                        f"• **हवा:** अधिकतम हवा की गति **{peak_wind:.0f} km/h** तक रहेगी।\n\n"
+                        f"🗓️ **दैनिक पूर्वानुमान विवरण:**\n{breakdown_str}\n\n"
+                        f"💡 **महत्वपूर्ण सुझाव:**\n"
+                        f"• **यात्रा:** बारिश वाले दिनों में अतिरिक्त समय लेकर चलें और छाता साथ रखें।\n"
+                        f"• **कृषि/बागवानी:** उच्च बारिश वाले दिनों में कीटनाशक छिड़काव से बचें।"
+                    )
+                elif lang == "hinglish":
+                    lines = [f"• **{_day_name(fc.date, 'en')}:** {_get_fc_icon(fc.weather_description)} {fc.weather_description} · High **{fc.temp_max_c:.0f}°C** / Low **{fc.temp_min_c:.0f}°C** · Rain: **{fc.precipitation_probability_pct}%** (~{fc.precipitation_sum_mm:.1f} mm)" for fc in window_fcs]
+                    breakdown_str = "\n".join(lines)
+                    return (
+                        f"📅 **{city} {count}-Day Comprehensive Weather Analysis:**\n\n"
+                        f"📊 **Trend Summary:**\n"
+                        f"• **Temperature Trend:** Highs between **{min(high_temps):.0f}°C – {max_high:.0f}°C**, lows around **{min_low:.0f}°C**.\n"
+                        f"• **Precipitation:** **{rainy_days_count} of {count} days** have rain chances $\ge 40\%$. Total estimated rain: **~{total_rain:.1f} mm**.\n\n"
+                        f"🗓️ **Daily Breakdown:**\n{breakdown_str}\n\n"
+                        f"💡 **Guidance:** Rain wale dino mein compact umbrella zaroor carry karein."
+                    )
+                elif lang == "or":
+                    lines = [f"• **{_day_name(fc.date, 'or')}:** {_get_fc_icon(fc.weather_description)} {fc.weather_description} · ସର୍ବାଧିକ **{fc.temp_max_c:.0f}°C** / ସର୍ବନିମ୍ନ **{fc.temp_min_c:.0f}°C** · ବର୍ଷା: **{fc.precipitation_probability_pct}%** (~{fc.precipitation_sum_mm:.1f} mm)" for fc in window_fcs]
+                    breakdown_str = "\n".join(lines)
+                    return (
+                        f"📅 **{city} ପାଇଁ {count}-ଦିନର ବିସ୍ତୃତ ପାଣିପାଗ ପୂର୍ବାନୁମାନ ଓ ବିଶ୍ଳେଷଣ:**\n\n"
+                        f"📊 **ମୁଖ୍ୟ ପାଣିପାଗ ଧାରା:**\n"
+                        f"• **ତାପମାତ୍ରା:** ସର୍ବାଧିକ **{max_high:.0f}°C** ଏବଂ ସର୍ବନିମ୍ନ **{min_low:.0f}°C** ରହିବ।\n"
+                        f"• **ବର୍ଷା ଆଶଙ୍କା:** {count} ଦିନ ମଧ୍ୟରୁ **{rainy_days_count} ଦିନ** ବର୍ଷା ସମ୍ଭାବନା ଅଛି (~{total_rain:.1f} mm)।\n\n"
+                        f"🗓️ **ଦୈନିକ ପୂର୍ବାନୁମାନ ବିବରଣୀ:**\n{breakdown_str}\n\n"
+                        f"💡 **ପରାମର୍ଶ:** ବାହାରକୁ ଯିବା ସମୟରେ ଛତା ସାଙ୍ଗରେ ରଖନ୍ତୁ।"
+                    )
+                lines = [f"• **{_day_name(fc.date, 'en')}:** {_get_fc_icon(fc.weather_description)} {fc.weather_description} · High **{fc.temp_max_c:.0f}°C** / Low **{fc.temp_min_c:.0f}°C** · Rain Risk: **{fc.precipitation_probability_pct}%** (~{fc.precipitation_sum_mm:.1f} mm) · Wind: {fc.max_wind_speed_kmh:.0f} km/h" for fc in window_fcs]
+                breakdown_str = "\n".join(lines)
+                return (
+                    f"📅 **Meteorological Forecast & Trend Analysis for {city} ({count}-Day Outlook):**\n\n"
+                    f"📊 **Atmospheric Trend Overview:**\n"
+                    f"• **Thermal Profile:** Daytime highs steady between **{min(high_temps):.0f}°C – {max_high:.0f}°C** with night lows hovering near **{min_low:.0f}°C**.\n"
+                    f"• **Precipitation Dynamics:** **{rainy_days_count} of {count} days** exhibit convective rain risk ($\ge 40\%$). Cumulative estimated rainfall: **~{total_rain:.1f} mm**.\n"
+                    f"• **Wind & Flow:** Peak wind gusts reaching **{peak_wind:.0f} km/h**.\n\n"
+                    f"🗓️ **Daily Meteorological Breakdown:**\n{breakdown_str}\n\n"
+                    f"💡 **Practical Planning & Recommendations:**\n"
+                    f"• **Commute & Travel:** Allow extra transit time on days with $\ge 50\%$ precipitation risk; wet roads will reduce tire traction.\n"
+                    f"• **Outdoor Workouts:** Morning hours (6:00 AM – 8:30 AM) offer the most favorable dry windows before daytime solar heating triggers convective showers.\n"
+                    f"• **Agro & Lawn Care:** Hold off on agrochemical spraying on high precipitation days to avoid runoff."
+                )
+
+        # 7. Clothes Drying / Laundry
+        if resolved_query.intent == CanonicalIntent.CLOTHES_DRYING or _has_kw(["dry", "drying", "laundry", "clothes outside", "कपड़े सुखाना"]):
+            if is_raining or humid > 80.0 or (is_future and target_fc and target_fc.precipitation_probability_pct > 40):
+                return f"👕 **Keep laundry indoors in {city} {date_label_en}!** Rain or high humidity is expected. Clothes will not dry well outdoors. 🌧️"
+            return f"👕 **Great day to dry laundry outside in {city} {date_label_en}!** Clear conditions and good ventilation expected. 🌤️"
+
+        # 8. Drone Flying
+        if _has_kw(["drone", "uav", "quadcopter", "ड्रोन"]):
+            if is_raining or wind_val > 28.0:
+                if lang == "hi":
+                    return f"🚁 **आज {city} में ड्रोन उड़ाना सुरक्षित नहीं है!**\n\n• **कारण:** {'बारिश हो रही है' if is_raining else f'हवा की गति तेज है ({wind})'}।\n• **सुरक्षा सलाह:** ड्रोन के मोटर्स व इलेक्ट्रॉनिक्स को सुरक्षित रखने के लिए मौसम साफ़ और हवा शांत (<20 km/h) होने तक प्रतीक्षा करें।"
+                return f"🚁 **Not recommended to fly a drone in {city} right now!**\n\n• **Hazard:** {'Active precipitation will damage electronic motors.' if is_raining else f'Wind speeds at {wind} exceed safe operational stability for consumer drones.'}\n• **Safety Window:** Wait for winds under 20 km/h and dry skies."
+            if lang == "hi":
+                return f"🚁 **हाँ! {city} में ड्रोन उड़ाने के लिए मौसम अनुकूल है!**\n\n• **हवा की गति:** {wind} (स्थिर व सुरक्षित)\n• **दृश्यता (Visibility):** {visibility} · बादल: {cloud_cover:.0f}%\n• **सलाह:** लाइन-ऑफ-साइट बनाए रखें और बैटरी तापमान पर ध्यान दें।"
+            return f"🚁 **Good conditions for drone flying in {city}!**\n\n• **Wind Speed:** {wind} (within safe limits < 25 km/h)\n• **Visibility:** {visibility} · Cloud cover: {cloud_cover:.0f}%\n• Skies are favorable for aerial photography and flight stability."
+
+        # 9. Stargazing
+        if _has_kw(["stargaze", "stargazing", "telescope", "astronomy", "night sky", "तारों", "तारे देखने"]):
+            if cloud_cover > 50.0 or is_raining:
+                if lang == "hi":
+                    return f"🔭 **आज रात {city} में तारे देखना (Stargazing) कठिन होगा।**\n\n• **बादल आवरण:** {cloud_cover:.0f}% ({cond})\n• **आर्द्रता:** {humid:.0f}%\n• बादलों के कारण आकाशीय पिंड स्पष्ट दिखाई नहीं देंगे।"
+                return f"🔭 **Poor conditions for stargazing in {city} tonight.**\n\n• **Cloud Cover:** {cloud_cover:.0f}% ({cond})\n• **Humidity:** {humid:.0f}%\n• Dense cloud cover will obstruct telescope and naked-eye celestial visibility."
+            if lang == "hi":
+                return f"✨ **आज रात {city} में तारे देखने के लिए बेहतरीन रात है!**\n\n• **आसमान:** साफ़ ({cloud_cover:.0f}% बादल)\n• **दृश्यता:** {visibility}\n• टेलिस्कोप और खगोलीय अवलोकन के लिए परिस्थितियां आदर्श हैं।"
+            return f"✨ **Excellent stargazing conditions in {city} tonight!**\n\n• **Cloud Cover:** Minimal ({cloud_cover:.0f}%)\n• **Atmospheric Visibility:** {visibility}\n• Clear atmospheric columns provide optimal clarity for astronomy and astrophotography."
+
+        # 10. UV Radiation & Sunscreen
+        if _has_kw(["uv", "uv index", "sunscreen", "sunburn", "sun tan", "tanning", "सनस्क्रीन"]):
+            uv_advice_en = "Apply SPF 30+ sunscreen, wear UV-blocking sunglasses, and limit direct exposure between 11 AM – 3 PM." if uv >= 6.0 else "Minimal UV hazard; standard skincare is sufficient."
+            if lang == "hi":
+                return f"☀️ **{city} में यूवी (UV) इंडेक्स रिपोर्ट:**\n\n• **वर्तमान UV इंडेक्स:** **{uv:.1f}** ({'अत्यधिक / तीव्र' if uv >= 6.0 else 'सामान्य'})\n• **सुझाव:** {'SPF 30+ सनस्क्रीन लगाएं, धूप का चश्मा पहनें और दोपहर में सीधी धूप से बचें।' if uv >= 6.0 else 'यूवी जोखिम कम है, सामान्य रूप से बाहर निकल सकते हैं।'}"
+            return f"☀️ **UV Radiation Index for {city}:**\n\n• **Current UV Level:** **{uv:.1f}** ({'High Solar Intensity' if uv >= 6.0 else 'Low-to-Moderate'})\n• **Action:** {uv_advice_en}"
+            if any(w in raw_q_lower for w in ["spray", "pesticide", "fertilizer"]):
+                if is_raining or (is_future and target_fc and target_fc.precipitation_probability_pct > 40):
+                    return f"🌧️ **Hold off on spraying chemicals in {city} {date_label_en}!** Rain risk ({target_fc.precipitation_probability_pct if target_fc else 60}%) will wash away applied treatments."
+                return f"✅ **Suitable window for spraying in {city} {date_label_en}!** Skies are dry, wind is manageable."
+            if is_raining or (is_future and target_fc and target_fc.precipitation_probability_pct > 50):
+                rain_pct = target_fc.precipitation_probability_pct if target_fc else 75
+                if lang == "hi":
+                    return f"🌱 **{date_label_hi} {city} में पौधों को पानी देने की आवश्यकता नहीं है!**\n\n• बारिश की संभावना सक्रिय है ({rain_pct}%), जिससे मिट्टी में प्राकृतिक नमी बनी रहेगी。"
+                elif lang == "hinglish":
+                    return f"🌱 **{date_label_hinglish} {city} mein paudho ko paani mat daalo!** Rain chances {rain_pct}% hain jisse soil naturally moist rahegi."
+                return f"🌱 **Hold off on outdoor watering in {city} {date_label_en}!**\n\n• Rain is expected ({rain_pct}% chance), providing natural soil hydration."
+            else:
+                if lang == "hi":
+                    return f"🌱 **हाँ, {date_label_hi} {city} में पौधों को पानी देने के लिए अच्छा दिन है!** सुबह या शाम के समय पानी दें।"
+                elif lang == "hinglish":
+                    return f"🌱 **Haan, {date_label_hinglish} {city} mein paudho ko paani dene ke liye accha din hai!** Morning ya evening mein dalein."
+                return f"🌱 **Yes, {date_label_en} is a good day for gardening and watering plants in {city}!**\n\n• Water during early morning or late afternoon to minimize evaporation."
+
+        # Q. Weekend & Multi-Day Forecast
+        if resolved_query.intent == CanonicalIntent.WEATHER_FORECAST or any(w in raw_q_lower for w in ["weekend", "tomorrow", "forecast", "upcoming", "week", "sept", "september", "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "oct", "nov", "dec"]):
+            if is_future and target_fc:
+                if lang == "hi":
+                    return f"📅 **{city} का मौसम पूर्वानुमान ({date_label_hi}):**\n\n• **अनुमानित मौसम:** {target_fc.weather_description}\n• **तापमान:** अधिकतम **{target_fc.temp_max_c:.1f}°C** / न्यूनतम **{target_fc.temp_min_c:.1f}°C**\n• **बारिश की संभावना:** **{target_fc.precipitation_probability_pct}%** ({target_fc.precipitation_sum_mm:.1f} mm)\n• **हवा की गति:** अधिकतम {target_fc.max_wind_speed_kmh:.0f} km/h"
+                elif lang == "hinglish":
+                    return f"📅 **{city} ka weather forecast ({date_label_hinglish}):**\n\n• **Expected:** {target_fc.weather_description}\n• **High/Low:** **{target_fc.temp_max_c:.1f}°C / {target_fc.temp_min_c:.1f}°C**\n• **Rain Risk:** **{target_fc.precipitation_probability_pct}%** ({target_fc.precipitation_sum_mm:.1f} mm)\n• **Max Wind:** {target_fc.max_wind_speed_kmh:.0f} km/h"
+                elif lang == "or":
+                    return f"📅 **{city} ର ପାଣିପାଗ ପୂର୍ବାନୁମାନ ({date_label_or}):**\n\n• **ଆକାଶ:** {target_fc.weather_description}\n• **ତାପମାତ୍ରା:** ସର୍ବାଧିକ **{target_fc.temp_max_c:.1f}°C** / ସର୍ବନିମ୍ନ **{target_fc.temp_min_c:.1f}°C**\n• **ବର୍ଷା ସମ୍ଭାବନା:** **{target_fc.precipitation_probability_pct}%** ({target_fc.precipitation_sum_mm:.1f} mm)\n• **ପବନର ଗତି:** {target_fc.max_wind_speed_kmh:.0f} km/h"
+                return f"📅 **Weather Forecast for {city} ({date_label_en}):**\n\n• **Expected:** **{target_fc.weather_description}**\n• **High/Low:** **{target_fc.temp_max_c:.1f}°C / {target_fc.temp_min_c:.1f}°C**\n• **Rain Risk:** **{target_fc.precipitation_probability_pct}%** ({target_fc.precipitation_sum_mm:.1f} mm)\n• **Max Wind:** **{target_fc.max_wind_speed_kmh:.0f} km/h**"
+            elif forecasts:
+                lines = [f"• **{fc.date}:** {fc.weather_description} · {fc.temp_max_c:.0f}°C/{fc.temp_min_c:.0f}°C · Rain: {fc.precipitation_probability_pct}%" for fc in forecasts[:5]]
+                return f"📅 **Upcoming 5-Day Forecast for {city}:**\n\n" + "\n".join(lines)
 
         # R. Outfit & Clothing
         if resolved_query.intent == CanonicalIntent.OUTFIT_RECOMMENDATION or any(w in raw_q_lower for w in ["wear", "wearing", "clothes", "jacket", "outfit"]):
-            if is_raining:
-                return f"🧥 **Outfit tip for {city}:** It's currently **{temp}** with active rain. Wear a **waterproof jacket or raincoat** and keep an **umbrella** handy! 🌧️"
-            elif temp_val < 18.0:
-                return f"🧥 **Outfit tip for {city}:** It's cool at **{temp}**. A **sweater, warm hoodie, or jacket** will keep you comfortable! ❄️"
-            elif temp_val <= 30.0:
-                return f"👕 **Outfit tip for {city}:** Pleasant weather in {city} (**{temp}**, {cond}). Standard **breathable cotton clothes or casual wear** are ideal today! 🌤️"
+            effective_temp = target_fc.temp_max_c if (is_future and target_fc) else temp_val
+            effective_rain = (target_fc.precipitation_probability_pct > 40) if (is_future and target_fc) else is_raining
+            if effective_rain:
+                return f"🧥 **Outfit tip for {city} ({date_label_en}):** Rain is active or expected. Wear a **waterproof jacket or raincoat** and keep an **umbrella** handy! 🌧️"
+            elif effective_temp < 18.0:
+                return f"🧥 **Outfit tip for {city} ({date_label_en}):** It will be cool at **{effective_temp:.0f}°C**. A **sweater, warm hoodie, or jacket** will keep you comfortable! ❄️"
+            elif effective_temp <= 30.0:
+                return f"👕 **Outfit tip for {city} ({date_label_en}):** Pleasant weather (**{effective_temp:.0f}°C**). Standard **breathable cotton clothes or casual wear** are ideal! 🌤️"
             else:
-                return f"👕 **Outfit tip for {city}:** It's warm at **{temp}**. Wear **lightweight, loose cotton clothing**, wear sunglasses for sun protection, and stay hydrated! ☀️"
+                return f"👕 **Outfit tip for {city} ({date_label_en}):** It's warm (**{effective_temp:.0f}°C**). Wear **lightweight, loose cotton clothing**, wear sunglasses for sun protection, and stay hydrated! ☀️"
 
-        # S. Clothes Drying / Laundry
-        if resolved_query.intent == CanonicalIntent.CLOTHES_DRYING or any(w in raw_q_lower for w in ["dry", "laundry", "clothes outside"]):
-            if is_raining or humid > 80.0:
-                return f"👕 **Keep laundry indoors today in {city}!** It's currently rainy/humid ({temp}, humidity {humid:.0f}%). Clothes will not dry well outdoors. 🌧️"
-            return f"👕 **Great day to dry laundry outside in {city}!** Skies are **{cond}** with winds at **{wind}** and temperature at {temp}. 🌤️"
 
-        # T. Rain & Precipitation
-        if resolved_query.intent == CanonicalIntent.PRECIPITATION or any(w in raw_q_lower for w in ["rain", "umbrella", "shower"]):
-            if is_raining:
-                return f"🌧️ **Yes, it is raining in {city}!** Current temperature is **{temp}** with active precipitation ({precip:.1f} mm/h). Make sure to carry an umbrella."
-            rain_chance = forecasts[0].precipitation_probability_pct if forecasts else 20
-            if rain_chance >= 40:
-                return f"🌦️ There is a **{rain_chance}% chance of rain** later today in **{city}** ({temp}, {cond}). Carrying a compact umbrella is recommended."
-            return f"☀️ **No significant rain expected right now in {city}.** Skies are **{cond}** and temperature is **{temp}**."
 
-        # U. Default Current Weather Snapshot
+        # U. Default Targeted / Current Weather Snapshot
+        if is_future and target_fc:
+            if lang == "hi":
+                return f"📅 **{city} का मौसम पूर्वानुमान ({date_label_hi}):**\n\n• **मौसम:** {target_fc.weather_description}\n• **तापमान:** अधिकतम **{target_fc.temp_max_c:.1f}°C** / न्यूनतम **{target_fc.temp_min_c:.1f}°C**\n• **बारिश की संभावना:** {target_fc.precipitation_probability_pct}%\n• **हवा:** {target_fc.max_wind_speed_kmh:.0f} km/h"
+            elif lang == "hinglish":
+                return f"📅 **{city} ka weather ({date_label_hinglish}):**\n\n• **Condition:** {target_fc.weather_description}\n• **High/Low:** **{target_fc.temp_max_c:.1f}°C / {target_fc.temp_min_c:.1f}°C**\n• **Rain Risk:** {target_fc.precipitation_probability_pct}%\n• **Wind:** {target_fc.max_wind_speed_kmh:.0f} km/h"
+            elif lang == "or":
+                return f"📅 **{city} ର ପାଣିପାଗ ପୂର୍ବାନୁମାନ ({date_label_or}):**\n\n• **ଆକାଶ:** {target_fc.weather_description}\n• **ତାପମାତ୍ରା:** ସର୍ବାଧିକ **{target_fc.temp_max_c:.1f}°C** / ସର୍ବନିମ୍ନ **{target_fc.temp_min_c:.1f}°C**\n• **ବର୍ଷା ସମ୍ଭାବନା:** {target_fc.precipitation_probability_pct}%"
+            return f"📅 **Weather Forecast for {city} ({date_label_en}):**\n\n• **Condition:** **{target_fc.weather_description}**\n• **High / Low:** **{target_fc.temp_max_c:.1f}°C / {target_fc.temp_min_c:.1f}°C**\n• **Rain Probability:** **{target_fc.precipitation_probability_pct}%** ({target_fc.precipitation_sum_mm:.1f} mm)\n• **Max Wind Speed:** **{target_fc.max_wind_speed_kmh:.0f} km/h**"
+
         if lang == "hi":
             return f"🌤️ **{city}** में वर्तमान तापमान **{temp}** (अहसास: {feels_like}) है और मौसम **{cond}** है। आर्द्रता {humid:.0f}% और हवा {wind} की गति से चल रही है।"
         elif lang == "hinglish":
@@ -796,20 +1101,26 @@ Instructions:
             climate=climate_trend
         )
 
-        # 8. MULTILINGUAL TRANSLATION (If regional Indian script requested)
+        # 8. MULTILINGUAL TRANSLATION (Only if response is still purely English for a regional query)
+        def _has_indic_script(text: str) -> bool:
+            return any(ord(c) > 127 for c in text)
+
         translated_answer = None
         if target_lang != "en" and structured_query.language != "hinglish":
-            translated_answer = self.indic_engine.translate_and_localize(
-                english_text=english_answer,
-                target_lang=target_lang,
-                query=query_text,
-                weather=cur_weather,
-                forecasts=daily_fc,
-                nwp=nwp_forecast,
-                alerts=alerts,
-                advisory=agro_advisory,
-                climate=climate_trend
-            )
+            if _has_indic_script(english_answer):
+                translated_answer = english_answer
+            else:
+                translated_answer = self.indic_engine.translate_and_localize(
+                    english_text=english_answer,
+                    target_lang=target_lang,
+                    query=query_text,
+                    weather=cur_weather,
+                    forecasts=daily_fc,
+                    nwp=nwp_forecast,
+                    alerts=alerts,
+                    advisory=agro_advisory,
+                    climate=climate_trend
+                )
 
         # 9. UPDATE CONVERSATION CONTEXT MEMORY
         final_text = translated_answer or english_answer

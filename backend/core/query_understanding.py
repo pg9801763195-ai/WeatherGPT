@@ -473,17 +473,17 @@ class QueryUnderstandingEngine:
                 entities={"raw_query": q}
             )
 
-        # 3. Time Reference Extraction
+        # 3. Time Reference Extraction (Multilingual & Typo-Tolerant)
         time_ref = "today"
-        if any(w in q_lower for w in ["parso", "parson", "day after tomorrow", "परसों"]):
+        if re.search(r"\b(day\s+after\s+tomm?orr?ow|overmorrow|parso|parson|परसों|ଆରଦିନ)\b", q_lower) or any(w in q_lower for w in ["parso", "parson", "day after tomorrow", "परसों"]):
             time_ref = "day_after_tomorrow"
-        elif any(w in q_lower for w in ["kal", "tomorrow", "next day", "upcoming day", "agle din", "कल"]):
+        elif re.search(r"\b(tomm?orr?ow|tmrw|tmr|next\s+day|upcoming\s+day|agle\s+din|kal|कल|ଆସନ୍ତାକାଲି|କାଲି|రేపు|நாளை|কাল|আগামীকাল|उद्या|આવતીકાલે|ನಾಳೆ|നാಳೆ|ਕੱਲ੍ਹ|ਭਲਕੇ)\b", q_lower) or any(w in q_lower for w in ["kal", "tomorrow", "tommorrow", "tomorow", "tommorow", "tmrw", "next day", "upcoming day", "agle din", "कल", "ଆସନ୍ତାକାଲି", "କାଲି", "రేపు", "நாளை", "কাল", "আগামীকাল", "उद्या", "આવતીકાલે", "ನಾಳೆ", "ನಾಳೆ", "ਕੱ_ҳ"]):
             time_ref = "tomorrow"
-        elif any(w in q_lower for w in ["weekend", "hafta ant"]):
+        elif re.search(r"\b(weekend|week\s+end|hafta\s+ant|saturday|sunday|शनिवार|रविवार|ଶନିବାର|ରବିବାର|वीकेंड|सप्ताहांत)\b", q_lower) or any(w in q_lower for w in ["weekend", "hafta ant", "saturday", "sunday", "वीकेंड", "सप्ताहांत"]):
             time_ref = "weekend"
-        elif any(w in q_lower for w in ["week", "7 days", "next 3 days", "next 5 days", "agle 3 din", "weekly", "सप्ताह"]):
+        elif re.search(r"\b(week|weekly|7\s*days?|5\s*days?|3\s*days?|next\s*days?|upcoming\s*days?|aane\s*wale\s*din|aane\s*wale\s*dino|agle\s*din|agle\s*kuch\s*din|agle\s*[0-9]+\s*din|सप्ताह|आने\s*वाले|ଆସନ୍ତା\s*[୦-୯0-9]+\s*ଦିନ|ଆସନ୍ତା\s*ଦିନ)\b", q_lower) or any(w in q_lower for w in ["week", "7 days", "5 days", "3 days", "upcoming days", "aane wale", "aane wale din", "aane wale dino", "agle kuch din", "weekly", "सप्ताह", "आने वाले", "ଆସନ୍ତା"]):
             time_ref = "next_7_days"
-        elif any(w in q_lower for w in ["yesterday", "beeta kal", "history", "past"]):
+        elif re.search(r"\b(yesterday|beeta\s+kal|history|past|archive|पिछला)\b", q_lower) or any(w in q_lower for w in ["yesterday", "beeta kal", "history", "past"]):
             time_ref = "historical"
 
         # 4. Location Extraction via Safe Candidate Resolver
@@ -500,9 +500,9 @@ class QueryUnderstandingEngine:
                 "go outside", "bahar jana", "bahar jaana", "ghumne", "ghumna", "jau kya", "jaana theek",
                 "drive karna", "gaadi chalana", "sadak ka haal", "drive or commute"
             ]
-        ):
+        ) or any(w in q for w in ["ଯାତ୍ରା", "ଡ୍ରାଇଭ୍", "ରାସ୍ତା", "ସୁରକ୍ଷିତ", "ଘୁରିବା", "यात्रा", "सफर", "सड़क", "प्रवास", "घूमने"]):
             intent = CanonicalIntent.TRAVEL_WEATHER
-            activity = "commute_drive" if any(w in q_lower for w in ["drive", "driving", "commute", "road", "traffic", "gaadi", "chalana"]) else "travel_sightseeing"
+            activity = "commute_drive" if any(w in q_lower for w in ["drive", "driving", "commute", "road", "traffic", "gaadi", "chalana", "ଡ୍ରାଇଭ୍", "ରାସ୍ତା"]) else "travel_sightseeing"
 
         # Check Outdoor Activity / Workout / Walk / Running / Sports / Car Wash
         elif re.search(r"\b(walk|walking|workout|running|run|jog|jogging|exercise|fitness|cricket|sports|play|playing|match)\b", q_lower) or any(
@@ -510,9 +510,9 @@ class QueryUnderstandingEngine:
                 "best time for a walk", "morning walk", "evening walk", "outdoor workout", "go for a walk",
                 "cricket match", "khelna", "khel", "workout time", "exercise outside", "morning walk ka time", "walk karne", "walk or outdoor workout"
             ]
-        ):
+        ) or any(w in q for w in ["ବ୍ୟାୟାମ", "ଖେଳ", "କସରତ", "कसरत", "टहलने"]):
             intent = CanonicalIntent.OUTDOOR_ACTIVITY
-            activity = "walk_workout" if any(w in q_lower for w in ["walk", "workout", "run", "running", "jog", "exercise", "fitness"]) else "cricket"
+            activity = "walk_workout" if any(w in q_lower for w in ["walk", "workout", "run", "running", "jog", "exercise", "fitness", "ବ୍ୟାୟାମ"]) else "cricket"
 
         elif any(w in q_lower for w in ["car wash", "wash my car", "wash my bike", "gaadi dhona", "gadi dhona"]):
             intent = CanonicalIntent.OUTDOOR_ACTIVITY
@@ -521,30 +521,34 @@ class QueryUnderstandingEngine:
         # Check Agro / Farming / Spraying / Gardening / Plant Watering
         elif re.search(r"\b(garden|gardening|plant|plants|watering|water plants|spray|chhidkaw|kheti|crop|cotton|paddy|rice|wheat|mustard|pest|irrigate|farming|dhan|kapas|kisan)\b", q_lower) or any(
             phrase in q_lower for phrase in ["water plants", "watering plants", "outdoor watering", "water my plants", "paani dena", "paudho ko paani", "fasal", "gardening or outdoor watering"]
-        ) or any(w in q for w in ["छिड़काव", "फसल", "धान", "खेती", "सिंचाई", "पौधे", "पौधों"]):
+        ) or any(w in q for w in ["छिड़काव", "फसल", "धान", "खेती", "सिंचाई", "पौधे", "पौधों", "ଗଛ", "ଚାଷ", "କୃଷି", "ପାଣି ଦେବା"]):
             intent = CanonicalIntent.AGRO_ADVISORY
-            activity = "gardening_watering" if any(w in q_lower for w in ["garden", "plant", "water", "paudhe", "paani", "watering"]) else "spray"
+            activity = "gardening_watering" if any(w in q_lower for w in ["garden", "plant", "water", "paudhe", "paani", "watering", "ଗଛ"]) else "spray"
 
         # Check Outfit Recommendation ("what clothes should i wear??", "should I wear a jacket?", "kya pehnu")
         elif re.search(r"\b(wear|wearing|jacket|hoodie|sweater|outfit|coat|raincoat|pehne|pehnu|pehnna|pehna)\b", q_lower) or any(
             phrase in q_lower for phrase in ["clothes should i wear", "what should i wear", "what clothes to wear", "what to wear", "kya pehna chahiye", "kya pehnu", "what should i wear today"]
-        ):
+        ) or any(w in q for w in ["ପିନ୍ଧିବା", "ପୋଷାକ", "कपड़े", "पहनना"]):
             intent = CanonicalIntent.OUTFIT_RECOMMENDATION
             activity = "outfit"
 
         # Check Clothes Drying / Laundry ("can I dry my clothes outside?", "will my clothes dry today?", "kapde sukhana")
         elif re.search(r"\b(dry|drying|sukha|sukhana|sukhane|sukhayein|laundry)\b", q_lower) and any(
             w in q_lower for w in ["clothes", "cloth", "laundry", "kapde", "sukha", "dry", "hang"]
-        ):
+        ) or any(w in q for w in ["ଶୁଖାଇବା", "ସୁଖାଇବା"]):
             intent = CanonicalIntent.CLOTHES_DRYING
             activity = "clothes_drying"
 
+        # Check Weather Forecast & Multi-Day Windows
+        elif any(w in q_lower for w in ["forecast", "upcoming", "weekend", "week", "पूर्वानुमान", "अगले", "आने वाले"]) or any(w in q for w in ["ପୂର୍ବାନୁମାନ", "ଆସନ୍ତା", "ଦିନର"]) or time_ref in ["next_7_days", "weekend"]:
+            intent = CanonicalIntent.WEATHER_FORECAST
+
         # Check Rain / Precipitation / Umbrella ("will it rain today?")
-        elif any(w in q_lower for w in ["rain", "raining", "rainy", "barish", "baarish", "pani", "umbrella", "chata", "shower", "drizzle", "बारिश", "वर्षा", "पानी", "बरसात", "छाता", "rain ka kya scene"]):
+        elif any(w in q_lower for w in ["rain", "raining", "rainy", "barish", "baarish", "umbrella", "chata", "shower", "drizzle", "बारिश", "वर्षा", "बरसात", "छाता", "rain ka kya scene"]) or any(w in q for w in ["ବର୍ଷା", "ଛତା", "వర్షం", "மழை", "বৃষ্টি"]):
             intent = CanonicalIntent.PRECIPITATION
 
         # Check Extreme Alert
-        elif any(w in q_lower for w in ["alert", "warning", "cyclone", "flood", "heatwave", "thunderstorm", "hazard", "चेतावनी"]):
+        elif any(w in q_lower for w in ["alert", "warning", "cyclone", "flood", "heatwave", "thunderstorm", "hazard", "चेतावनी", "ସତର୍କ"]):
             intent = CanonicalIntent.WEATHER_ALERT
 
         # Check NWP / Instability
