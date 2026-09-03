@@ -38,6 +38,7 @@ from db.mongo_database import MongoDatabaseManager
 from auth.security import optional_auth
 from auth.auth_router import router as auth_router
 from auth.history_router import router as history_router
+from multimodal.realtime_mic import RealtimeVoiceDetector
 
 app = FastAPI(
     title="MausamVani Multimodal Weather Agent API",
@@ -56,9 +57,10 @@ app.add_middleware(
 )
 
 
-# Initialize Agent Singleton and Database
+# Initialize Agent Singleton, Voice Detector, and Database
 config = AgentConfig()
 agent = MultimodalWeatherAgent(config)
+voice_detector = RealtimeVoiceDetector(config)
 db = MongoDatabaseManager.get_instance(config.mongodb_uri, config.mongodb_db_name)
 
 # Mount Authentication & Assistant History Sub-Routers
@@ -314,6 +316,7 @@ async def handle_chat_query(req: ChatQueryRequest, request: Request):
 
 
 @app.post("/api/tts")
+@app.post("/api/tts/synthesize")
 async def generate_speech(req: TTSRequest):
     """
     Synthesize text-to-speech audio using edge-tts with Indian regional neural voices.
@@ -322,11 +325,13 @@ async def generate_speech(req: TTSRequest):
     if not req.text or not req.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
-    clean_text = req.text.replace("**", "").replace("#", "").replace("•", "").strip()
+    lang = req.language_code or "hi"
+    clean_text = agent.audio_engine.prepare_speech_text(req.text, lang)
+    if not clean_text:
+        clean_text = "Weather update."
     if len(clean_text) > 400:
         clean_text = clean_text[:397] + "..."
 
-    lang = req.language_code or "hi"
     voice = agent.config.tts_voice_map.get(lang, "hi-IN-SwaraNeural")
     out_dir = agent.audio_engine.output_dir
     filename = f"tts_{lang}_{int(time.time()*1000)}.mp3"
@@ -348,7 +353,7 @@ async def generate_speech(req: TTSRequest):
             "language": lang
         }
     except Exception as e:
-        fallback_path = agent.audio_engine.text_to_speech(clean_text, language_code=lang)
+        fallback_path = agent.audio_engine.text_to_speech(req.text, language_code=lang)
         if os.path.exists(fallback_path):
             with open(fallback_path, "rb") as f:
                 b64_str = base64.b64encode(f.read()).decode("utf-8")
@@ -389,6 +394,65 @@ async def handle_speech_to_text(file: UploadFile = File(...), language: Optional
                 os.remove(temp_path)
             except Exception:
                 pass
+
+
+class RealtimeMicRequest(BaseModel):
+    language: Optional[str] = "hi-IN"
+    max_duration: Optional[float] = 10.0
+    device_index: Optional[int] = None
+    location_name: Optional[str] = None
+
+
+@app.get("/api/voice/devices")
+def list_microphone_devices():
+    """List all hardware audio input devices (microphones) on the system."""
+    return {
+        "status": "success",
+        "devices": RealtimeVoiceDetector.list_audio_devices()
+    }
+
+
+@app.post("/api/voice/listen-mic")
+def listen_device_microphone(req: Optional[RealtimeMicRequest] = None):
+    """
+    Triggers device microphone listening with real-time Voice Activity Detection (VAD).
+    Records speech, transcribes, and executes MausamVani AI Agent.
+    """
+    lang = req.language if req and req.language else "hi-IN"
+    max_dur = req.max_duration if req and req.max_duration else 10.0
+    dev_idx = req.device_index if req and req.device_index is not None else None
+    loc_name = req.location_name if req and req.location_name else "Jatani"
+
+    text, audio_path = voice_detector.listen_and_transcribe(
+        language=lang,
+        max_duration=max_dur,
+        device_index=dev_idx
+    )
+
+    if not text:
+        return {
+            "status": "no_speech",
+            "transcript": "",
+            "message": "No speech detected within the listening window."
+        }
+
+    # Pass transcribed query directly to Agent pipeline
+    inp = MultimodalInput(
+        text_query=text,
+        location_name=loc_name,
+        language_code=lang[:2] if lang else "auto"
+    )
+    agent_res = agent.process_query(inp)
+    main_text = agent_res.translated_response or agent_res.response_text
+
+    return {
+        "status": "success",
+        "transcript": text,
+        "response_text": main_text,
+        "detected_language": agent_res.detected_language,
+        "location": agent_res.structured_weather.location.name if agent_res.structured_weather else loc_name,
+        "audio_captured": os.path.basename(audio_path) if audio_path else None
+    }
 
 
 @app.get("/api/nwp")

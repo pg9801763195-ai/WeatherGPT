@@ -351,3 +351,41 @@ export async function deleteConversationApi(conversationId, token) {
   });
   return res.ok;
 }
+
+/**
+ * Fetch available hardware microphone devices on the host system.
+ */
+export async function fetchAudioDevicesApi() {
+  try {
+    const res = await fetch(`${AGENT_API_BASE}/voice/devices`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.devices || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Triggers Python real-time microphone listening with Voice Activity Detection (VAD).
+ */
+export async function listenDeviceMicApi({ language = 'hi-IN', maxDuration = 10.0, locationName, deviceIndex } = {}) {
+  try {
+    const res = await fetch(`${AGENT_API_BASE}/voice/listen-mic`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language,
+        max_duration: maxDuration,
+        location_name: locationName,
+        device_index: deviceIndex
+      })
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    console.warn('Realtime mic capture error:', e);
+    return null;
+  }
+}
+

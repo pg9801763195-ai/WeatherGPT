@@ -16,6 +16,12 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
 class AgentConfig:
     """Central configuration for Ollama models, NWP endpoints, RAG, and Multimodal components."""
     
+    # Google Gemini API Config (for LLM reasoning, Multimodal Audio/Vision, and Voice Assistant)
+    gemini_api_key: Optional[str] = os.getenv("GEMINI_API_KEY", None)
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    gemini_voice: str = os.getenv("GEMINI_VOICE", "Pooja")  # Options: Pooja, Chirag, Arvind, Priya, Aoede, Kore, Fenrir
+    primary_backend: str = os.getenv("PRIMARY_BACKEND", "auto")  # 'gemini' | 'ollama' | 'auto'
+
     # Ollama LLM & Vision Models
     ollama_host: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     llm_model: str = os.getenv("WEATHER_LLM_MODEL", "llama3.1:latest")
@@ -29,6 +35,9 @@ class AgentConfig:
     
     # Temperature & Sampling
     temperature: float = 0.2
+    cloud_temperature: float = 0.5
+    gemini_temperature: float = 0.5
+    tts_temperature: float = 0.7
     max_tokens: int = 2048
     
     # RAG Vector Store & Embeddings (Primary: Qdrant, Fallback: Chroma, Lexical)
@@ -69,6 +78,7 @@ class AgentConfig:
     tts_voice_map: Dict[str, str] = field(default_factory=lambda: {
         "en": "en-IN-NeerjaNeural",
         "hi": "hi-IN-SwaraNeural",
+        "or": "hi-IN-SwaraNeural",
         "te": "te-IN-MohanNeural",
         "ta": "ta-IN-PallaviNeural",
         "bn": "bn-IN-TanishaaNeural",

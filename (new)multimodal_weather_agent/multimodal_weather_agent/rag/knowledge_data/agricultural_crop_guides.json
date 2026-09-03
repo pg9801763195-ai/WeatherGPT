@@ -1,0 +1,26 @@
+[
+  {
+    "id": "cotton_agromet_01",
+    "category": "agriculture",
+    "crop": "Cotton",
+    "topic": "Cotton Weather Triggers & Pest Management",
+    "source_report": "ICAR Central Institute for Cotton Research (CICR) Guidelines",
+    "content": "Cotton requires warm, sunny climate (25°C - 35°C). High rainfall at square formation and boll development causes square shedding and boll rotting. Warm humid weather (>70% RH, 28°C-32°C) triggers Pink Bollworm (Pectinophora gossypiella) and Whitefly outbreaks. Spraying conditions: Wind speed must be 5-15 km/h; avoid spraying if rain is forecast within 6 hours. Withhold irrigation when topsoil moisture is sufficient and rain is expected."
+  },
+  {
+    "id": "paddy_agromet_02",
+    "category": "agriculture",
+    "crop": "Paddy",
+    "topic": "Paddy Meteorological Management & Blast Control",
+    "source_report": "ICAR National Rice Research Institute (NRRI)",
+    "content": "Paddy thrives in mean temperatures of 22°C - 32°C with high humidity. Persistent cloudy conditions and relative humidity above 85% with dew trigger Pyricularia oryzae (Blast) and Brown Planthopper (BPH). Maintain 2-5 cm water level in field during panicle initiation, but drain field before heavy downpours (>50mm) to prevent submersion lodging. Apply Tricyclazole or Hexaconazole during clear sky windows."
+  },
+  {
+    "id": "wheat_agromet_03",
+    "category": "agriculture",
+    "crop": "Wheat",
+    "topic": "Wheat Terminal Heat Stress Mitigation",
+    "source_report": "ICAR Indian Agricultural Research Institute (IARI)",
+    "content": "Wheat requires cool vegetative periods (15°C - 20°C). Maximum temperature exceeding 30°C during grain filling (milking/dough stages) induces terminal heat stress, reducing thousand-grain weight. Provide light and frequent irrigation during evening hours when maximum temperature exceeds 30°C. Spray Potassium Nitrate (1%) to mitigate thermal shock."
+  }
+]

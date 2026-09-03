@@ -1,0 +1,30 @@
+[
+  {
+    "id": "ipcc_ar6_wg1_monsoon_01",
+    "category": "ipcc_climateqa",
+    "topic": "IPCC AR6 WG1: South Asian Monsoon & Precipitation Projections",
+    "source_report": "IPCC AR6 WG1 Chapter 10 / 11 (Physical Science Basis)",
+    "content": "IPCC AR6 WG1 assessment for South Asia: The South Asian summer monsoon precipitation is projected to increase in the long term with high confidence under medium and high greenhouse gas emission scenarios (SSP2-4.5, SSP3-7.0, SSP5-8.5). Enhanced warming of the Arabian Sea and Indian Ocean drives a 5% to 15% increase in total monsoon seasonal precipitation by mid-century. However, monsoon variability and extreme precipitation events will amplify significantly, leading to longer dry spells interspersed with short-duration torrential downpours exceeding 100mm/day."
+  },
+  {
+    "id": "ipcc_ar6_wg1_extremes_02",
+    "category": "ipcc_climateqa",
+    "topic": "IPCC AR6 WG1: Extreme Heat and Heatwave Attribution in India",
+    "source_report": "IPCC AR6 WG1 Chapter 11 (Weather and Climate Extremes)",
+    "content": "IPCC AR6 WG1 concludes that human-induced climate change has intensified the frequency and intensity of extreme heat events across South Asia. In the Indian subcontinent, annual heatwave days have increased significantly since 1950. Under a 2.0°C global warming scenario, deadly wet-bulb temperatures (Tw exceeding 31°C) will become frequent across the Indo-Gangetic Plain and coastal regions, approaching critical thresholds for human physiological tolerance and outdoor agricultural labor."
+  },
+  {
+    "id": "ipcc_ar6_wg2_agri_03",
+    "category": "ipcc_climateqa",
+    "topic": "IPCC AR6 WG2: Agricultural Vulnerability & Crop Yield Impacts in India",
+    "source_report": "IPCC AR6 WG2 Chapter 10 (Asia) & Chapter 5 (Food and Water)",
+    "content": "IPCC AR6 WG2 projects that unchecked warming of 1.5°C to 2.0°C will lead to a 5% to 15% reduction in wheat and paddy yields in India, primarily driven by terminal heat stress during grain-filling stages and erratic monsoon onset. Adaptation pathways strongly emphasize agro-meteorological advisory dissemination, micro-irrigation (drip/sprinkler), climate-resilient crop varieties (short-duration drought-tolerant rice and heat-tolerant wheat), and early warning systems for extreme precipitation anomalies."
+  },
+  {
+    "id": "ipbes_global_biodiversity_04",
+    "category": "ipcc_climateqa",
+    "topic": "IPBES Global Assessment: Land Degradation & Ecosystem-Based Adaptation",
+    "source_report": "IPBES Global Assessment Report on Biodiversity & Ecosystem Services",
+    "content": "The IPBES Global Assessment highlights that sustainable land management, agroforestry, and wetland conservation substantially mitigate climate risks in tropical agricultural regions. Integrating natural vegetative windbreaks reduces microclimate soil moisture loss by up to 25% during heatwaves, mitigating pesticide spray drift and preserving native pollinator populations essential for cotton, mustard, and pulse cultivation."
+  }
+]

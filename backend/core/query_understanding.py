@@ -75,7 +75,16 @@ VOCAB_STOPWORDS = {
     "pehnu", "pehnna", "pehna", "sukha", "sukhaye", "sukhayein", "sukhao", "sukhana",
     "barish", "baarish", "pani", "dhan", "chawal", "gehu", "fasal", "kheti", "spray",
     "chhidkaw", "kare", "karein", "karna", "sakte", "sakta", "sakti", "chahiye",
-    "shukriya", "dhanyawad", "namaste", "haal", "chal", "scene", "chances", "chance",
+    # Regional Indian language vocabulary that must NEVER be geocoded
+    "paus", "padel", "padnar", "ahe", "aahe", "kasa", "kashi", "madhe", "un", "thandi", "sanga",
+    "varsham", "paduthunda", "padtada", "padutundha", "ela", "undi", "undhi", "lo", "yenda", "gali", "goda", "cheppandi",
+    "mazhai", "peyyuma", "varuma", "eppadi", "irukku", "la", "veiyil", "kulir", "kaatru", "sollunga",
+    "barsa", "barsha", "heba", "hebo", "kipari", "kemiti", "re", "chata", "pani", "ajira", "kali", "paga",
+    "brishti", "bristi", "hobe", "kemon", "achhe", "te", "gorom", "thanda", "ajke", "kalke", "abohawa",
+    "varsad", "padse", "kevo", "chhe", "ma", "garmi", "chhatri", "aaje", "kale",
+    "male", "barutha", "hegide", "nalli", "bisi", "seke", "chatri", "heli",
+    "mazha", "peyyumo", "enganeyundu", "il", "choodu", "kuda", "parayu",
+    "meenh", "painda", "kiven", "ch", "thand", "dasso",
     # Devanagari & Indic general words
     "क्या", "आज", "में", "बारिश", "होगी", "छाता", "साथ", "रखें", "अभी", "बाहर",
     "निकलना", "ड्राइव", "करना", "सुरक्षित", "है", "वॉक", "कसरत", "के", "लिए",
@@ -255,9 +264,16 @@ class QueryUnderstandingEngine:
         return self._ollama_online
 
     def _fast_detect_language(self, text: str) -> str:
-        """Detect language script: Odia (or), Devanagari (hi/mr), Telugu (te), Tamil (ta), Bengali (bn), Gujarati (gu), Kannada (kn), Malayalam (ml), Punjabi (pa), or Hinglish/English."""
+        """
+        Accurately detect Indian language:
+        - Odia (or), Bengali (bn), Telugu (te), Tamil (ta), Kannada (kn), Malayalam (ml),
+          Gujarati (gu), Punjabi (pa), Marathi (mr), Hindi (hi), or English (en).
+        Supports both Native Unicode scripts and Roman transliterations.
+        """
         if not text:
             return "en"
+
+        marathi_unicode_markers = ["आहे", "कसा", "कशी", "पाऊस", "पिकांची", "शेती", "हवामान", "वारं", "करावी", "का", "तापमान", "वारा"]
 
         for char in text:
             code = ord(char)
@@ -278,21 +294,59 @@ class QueryUnderstandingEngine:
             if 0x0A00 <= code <= 0x0A7F:
                 return "pa"  # Punjabi (Gurmukhi)
             if 0x0900 <= code <= 0x097F:
-                return "hi"  # Devanagari (Hindi / Marathi)
+                if any(w in text for w in marathi_unicode_markers):
+                    return "mr"  # Marathi in Devanagari
+                return "hi"  # Hindi in Devanagari
 
-        # Distinct Hindi/Urdu romanized markers (strictly no English collision words like 'or', 'me', 'in', 'is', 'to', 'so')
-        hinglish_markers = {
-            "kya", "hai", "hain", "aaj", "kal", "parso", "parson", "kaise", "kaisa", "kaisi", "raha", "rahi", "rahe",
+        # Roman script transliteration markers
+        words = set(re.findall(r"\b[a-zA-Z]+\b", text.lower()))
+
+        odia_roman = {"re", "heba", "hebo", "kipari", "barsa", "barsha", "pani", "chata", "ajira", "kali", "paga", "asiba", "kariba", "surakshita", "kemiti", "achhi", "achi", "hele", "thare", "kana", "kete"}
+        if len(words.intersection(odia_roman)) >= 1:
+            return "or"
+
+        bengali_roman = {"te", "brishti", "hobe", "kemon", "achhe", "ache", "chata", "gorom", "thanda", "bataas", "batash", "bristi", "ajke", "kalke", "abohawa", "abhowa", "bhalo"}
+        if len(words.intersection(bengali_roman)) >= 1:
+            return "bn"
+
+        telugu_roman = {"lo", "varsham", "paduthunda", "padtada", "ela", "undi", "undhi", "chali", "yenda", "gali", "goda", "repu", "cheppandi", "vundhi", "vuntundhi", "untundi"}
+        if len(words.intersection(telugu_roman)) >= 1:
+            return "te"
+
+        tamil_roman = {"la", "mazhai", "peyyuma", "varuma", "eppadi", "irukku", "veiyil", "kulir", "kaatru", "kodai", "innaiku", "naalaiku", "sollunga"}
+        if len(words.intersection(tamil_roman)) >= 1:
+            return "ta"
+
+        marathi_roman = {"madhe", "paus", "padel", "kasa", "aahe", "ahe", "thandi", "un", "kapde", "sheti", "aajcha", "udya", "sang", "sanga"}
+        if len(words.intersection(marathi_roman)) >= 1:
+            return "mr"
+
+        gujarati_roman = {"ma", "varsad", "padse", "kevo", "chhe", "garmi", "chhatri", "aaje", "kale", "kaho", "hawaamaan"}
+        if len(words.intersection(gujarati_roman)) >= 1:
+            return "gu"
+
+        kannada_roman = {"nalli", "male", "barutha", "hegide", "bisi", "seke", "chali", "chatri", "ee dina", "nale", "heli"}
+        if len(words.intersection(kannada_roman)) >= 1:
+            return "kn"
+
+        malayalam_roman = {"il", "mazha", "peyyumo", "enganeyundu", "choodu", "kuda", "innu", "nale", "parayu"}
+        if len(words.intersection(malayalam_roman)) >= 1:
+            return "ml"
+
+        punjabi_roman = {"ch", "meenh", "painda", "kiven", "thand", "chhatri", "aj", "dasso"}
+        if len(words.intersection(punjabi_roman)) >= 1:
+            return "pa"
+
+        hindi_roman = {
+            "ka", "ki", "ke", "ko", "kya", "hai", "hain", "aaj", "kal", "parso", "parson", "kaise", "kaisa", "kaisi", "raha", "rahi", "rahe",
             "hogi", "hoga", "hoge", "baarish", "barish", "chahiye", "sakte", "sakta", "sakti", "karein", "karna", "kare",
             "bhai", "yaar", "batao", "bataiye", "bata", "btao", "dhup", "dhoop", "garmi", "thand", "thandi", "kapde",
-            "khelna", "aur", "badhiya", "achha", "accha", "theek", "nahi", "nahin", "dhan", "ghumne", "ghumna",
+            "khelna", "badhiya", "achha", "accha", "theek", "nahi", "nahin", "dhan", "ghumne", "ghumna",
             "jaana", "jana", "gaadi", "chata", "pehnu", "pehnna", "pehne", "sukha", "sukhana", "sukhayein", "kheti",
-            "chhidkaw", "fasal", "paani"
+            "chhidkaw", "fasal", "paani", "mein", "kitna", "bhi"
         }
-        words = set(re.findall(r"\b[a-zA-Z]+\b", text.lower()))
-        matched = words.intersection(hinglish_markers)
-        if len(matched) >= 1:
-            return "hinglish"
+        if len(words.intersection(hindi_roman)) >= 1:
+            return "hi"
 
         return "en"
 

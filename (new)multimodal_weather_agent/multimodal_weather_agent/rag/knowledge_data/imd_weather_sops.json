@@ -1,0 +1,16 @@
+[
+  {
+    "id": "imd_sop_heatwave_01",
+    "category": "meteorology",
+    "topic": "IMD Standard Operating Procedure for Heatwave Warning",
+    "source_report": "IMD National Weather Forecasting Centre (NWFC) Manual",
+    "content": "IMD Criteria for Heatwave: For plains, Maximum Temperature >= 40°C; for coastal stations >= 37°C; for hills >= 30°C. Based on departure from normal: Heatwave is declared when departure is +4.5°C to +6.4°C (Orange Alert); Severe Heatwave when departure is >= +6.5°C (Red Alert). When actual max temp reaches >= 45°C, heatwave is declared irrespective of normal."
+  },
+  {
+    "id": "imd_sop_cyclone_02",
+    "category": "meteorology",
+    "topic": "IMD 4-Stage Cyclone Early Warning System",
+    "source_report": "IMD Cyclone Warning Division Protocol",
+    "content": "IMD Cyclone Warning Stages: Stage 1 (Pre-Cyclone Watch, 72 hrs before); Stage 2 (Cyclone Alert - Yellow, 48 hrs before); Stage 3 (Cyclone Warning - Orange, 24 hrs before); Stage 4 (Post-Landfall Outlook - Red, 12 hrs before). Gale-force winds of 62-88 km/h define Cyclonic Storm; 89-117 km/h defines Severe Cyclonic Storm; >118 km/h defines Very Severe Cyclonic Storm."
+  }
+]
