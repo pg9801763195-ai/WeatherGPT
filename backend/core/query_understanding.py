@@ -29,32 +29,39 @@ VOCAB_STOPWORDS = {
     "she", "her", "they", "them", "their", "what", "which", "who", "whom", "whose",
     "where", "when", "why", "how", "all", "any", "both", "each", "few", "more", "most",
     "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than",
-    "too", "very", "can", "will", "just", "don", "should", "now",
+    "too", "very", "can", "will", "just", "don", "should", "now", "based", "with",
+    "for", "about", "from", "into", "onto", "upon", "under", "over", "above", "below",
     # Verbs & aux
     "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
     "having", "do", "does", "did", "doing", "would", "could", "should", "shall",
     "might", "must", "get", "got", "give", "tell", "show", "check", "see", "look",
     "take", "bring", "put", "let", "make", "know", "think", "need", "want", "help",
+    "carry", "keep", "stay", "water", "watering", "plant", "plants", "spray", "spraying",
     # Weather & clothing terms that must NEVER be geocoded
     "weather", "mausam", "climate", "forecast", "temp", "temperature", "rain", "raining",
     "rainy", "rains", "drizzle", "shower", "showers", "storm", "thunderstorm", "cloud",
     "clouds", "cloudy", "sunny", "sun", "wind", "windy", "humidity", "humid", "pressure",
     "heat", "hot", "cold", "warm", "chill", "chilly", "freeze", "freezing", "frost",
     "fog", "foggy", "mist", "haze", "uv", "aqi", "air", "sky", "skies", "umbrella",
-    "chata", "water", "pani",
+    "chata", "water", "pani", "precipitation", "condition", "conditions", "outlook",
     "clothes", "cloth", "clothing", "wear", "wearing", "wears", "jacket", "hoodie",
     "sweater", "coat", "raincoat", "outfit", "outfits", "dress", "shirt", "pant",
     "tshirt", "jeans", "shorts", "shoes", "dry", "drying", "laundry", "hang", "wash",
     "washing",
-    # Time words
+    # Activities & Temporal words
+    "time", "times", "walk", "walking", "workout", "workouts", "running", "run", "jog",
+    "jogging", "exercise", "fitness", "cricket", "sports", "match", "play", "playing",
+    "garden", "gardening", "watering", "farming", "crop", "crops", "agriculture",
+    "drive", "driving", "commute", "commuting", "road", "roads", "traffic", "ride",
+    "travel", "trip", "tour", "visit", "sightseeing", "outdoor", "outdoors", "indoor",
+    "indoors", "outside", "inside", "safe", "safety", "unsafe", "risk", "guidance",
+    "advice", "suggest", "suggested", "recommend", "report", "window", "windows",
     "today", "tomorrow", "yesterday", "tonight", "morning", "afternoon", "evening",
     "night", "day", "days", "week", "weeks", "weekend", "month", "months", "year",
     "upcoming", "current", "currently", "now", "right", "latest", "past", "history",
     # Conversational & general words
-    "good", "bad", "nice", "great", "fine", "best", "safe", "unsafe", "outside",
-    "inside", "outdoor", "outdoors", "indoor", "indoors", "car", "bike", "cricket",
-    "match", "play", "playing", "travel", "trip", "tour", "visit", "drive", "commute",
-    "plan", "going", "go", "gone", "went", "suggest", "recommend", "advice", "report",
+    "good", "bad", "nice", "great", "fine", "best", "car", "bike",
+    "plan", "going", "go", "gone", "went",
     "hello", "hi", "hey", "hola", "thanks", "thank", "please", "ok", "okay", "yes",
     "no", "yeah", "yep", "nope", "sure",
     # Hindi / Hinglish vocabulary that must NEVER be geocoded
@@ -68,7 +75,14 @@ VOCAB_STOPWORDS = {
     "pehnu", "pehnna", "pehna", "sukha", "sukhaye", "sukhayein", "sukhao", "sukhana",
     "barish", "baarish", "pani", "dhan", "chawal", "gehu", "fasal", "kheti", "spray",
     "chhidkaw", "kare", "karein", "karna", "sakte", "sakta", "sakti", "chahiye",
-    "shukriya", "dhanyawad", "namaste", "haal", "chal", "scene", "chances", "chance"
+    "shukriya", "dhanyawad", "namaste", "haal", "chal", "scene", "chances", "chance",
+    # Devanagari & Indic general words
+    "क्या", "आज", "में", "बारिश", "होगी", "छाता", "साथ", "रखें", "अभी", "बाहर",
+    "निकलना", "ड्राइव", "करना", "सुरक्षित", "है", "वॉक", "कसरत", "के", "लिए",
+    "सबसे", "अच्छा", "समय", "मौसम", "हिसाब", "से", "पहनना", "सही", "रहेगा",
+    "इस", "वीकेंड", "कैसा", "पौधों", "फसलों", "को", "पानी", "देना", "पूर्वानुमान",
+    "କଣ", "ଆଜି", "ବର୍ଷା", "ହେବ", "ଛତା", "ନେବା", "ଆବଶ୍ୟକ", "କି", "ବର୍ତ୍ତମାନ",
+    "ଯାତ୍ରା", "ବା", "ଡ୍ରାଇଭ", "କରିବା", "ସୁରକ୍ଷିତ", "ଆସନ୍ତାକାଲି", "ପାଣିପାଗ", "ପୂର୍ବାନୁମାନ"
 }
 
 
@@ -288,7 +302,7 @@ class QueryUnderstandingEngine:
             return False
 
         c_clean = candidate.strip().lower()
-        parts = re.findall(r"\b[a-zA-Z0-9\u0900-\u097F\-]+\b", c_clean)
+        parts = re.findall(r"\b[a-zA-Z0-9\u0900-\u0D7F\-]+\b", c_clean)
         if not parts:
             return False
 
@@ -309,14 +323,14 @@ class QueryUnderstandingEngine:
 
         # 1. Route / Destination Detection (e.g. 'Ranchi se Patratu jaana hai', 'from Delhi to Manali')
         route_patterns = [
-            r"(?:from\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
-            r"(?:([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\s+se\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\s+(?:jaana|jana|travel|trip))",
-            r"(?:trip\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
-            r"(?:visit\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
-            r"(?:travel\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
-            r"(?:going\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
-            r"(?:tour\s+to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
-            r"(?:to\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?))",
+            r"(?:from\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?)\s+to\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?))",
+            r"(?:([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?)\s+se\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?)\s+(?:jaana|jana|travel|trip))",
+            r"(?:trip\s+to\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?))",
+            r"(?:visit\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?))",
+            r"(?:travel\s+to\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?))",
+            r"(?:going\s+to\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?))",
+            r"(?:tour\s+to\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?))",
+            r"(?:to\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?))",
         ]
         for pat in route_patterns:
             m = re.search(pat, q, re.IGNORECASE)
@@ -330,37 +344,38 @@ class QueryUnderstandingEngine:
                     if self._is_safe_location_candidate(dest):
                         candidates.append(dest)
 
-        # 2. Devanagari Script Prepositional Markers
-        m_hi = re.search(r"([\u0900-\u097F]+)\s+(?:में|का|की|के|से|को|के पास)", q)
+        # 2. Devanagari & Regional Script Prepositional Markers
+        m_hi = re.search(r"([\u0900-\u0D7F]+)\s+(?:में|का|की|के|से|को|के पास)", q)
         if m_hi:
             cand = m_hi.group(1).strip()
             if self._is_safe_location_candidate(cand):
                 candidates.append(cand)
 
-        # 3. Standard Prepositional Patterns (in X, at X, near X, for X, X mein, X me, X ka, X ki)
+        # Odia & Indic script suffix stripping (e.g. ପୁରୀରେ -> ପୁରୀ, ଜଟଣୀରେ -> ଜଟଣୀ)
+        odia_words = re.findall(r"[\u0900-\u0D7F]+", q)
+        for ow in odia_words:
+            # Strip common postpositional suffixes
+            stem = re.sub(r"(?:ରେ|କୁ|ପାଇଁ|ର|में|का|की|के|से|को|लो|yil|te)$", "", ow).strip()
+            if stem and len(stem) > 1 and self._is_safe_location_candidate(stem):
+                candidates.append(stem)
+
+        # 3. Standard Prepositional & Relationship Patterns (of X, in X, at X, near X, around X, across X, over X, X mein, X me, X ka, X ki, X re, X lo, X yil)
         prep_patterns = [
-            r"\bin\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
-            r"\bat\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
-            r"\bnear\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
-            r"\bfor\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
-            r"\b([A-Za-z\u0900-\u097F]+)\s+mein\b",
-            r"\b([A-Za-z\u0900-\u097F]+)\s+me\b",
-            r"\b([A-Za-z\u0900-\u097F]+)\s+ka\b",
-            r"\b([A-Za-z\u0900-\u097F]+)\s+ki\b",
-            r"\b([A-Za-z\u0900-\u097F]+)\s+ke\s+paas\b",
-            r"\b([A-Za-z\u0900-\u097F]+)\s+ke\b",
+            r"\b(?:of|in|at|near|around|across|over)\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?)\b",
+            r"\b([A-Za-z\u0900-\u0D7F]+)\s+(?:mein|me|ka|ki|ke|ke\s+paas|re|lo|yil|te)\b",
+            r"\b([A-Za-z\u0900-\u0D7F]+)\s+(?:weather|forecast|temperature|temp|climate|rain|barish|mausam)\b",
+            r"\b(?:weather|forecast|temperature|temp|climate|rain|barish|mausam)\s+(?:of\s+|in\s+)?([A-Za-z\u0900-\u0D7F]+)\b",
         ]
         for pat in prep_patterns:
-            m = re.search(pat, q, re.IGNORECASE)
-            if m:
+            for m in re.finditer(pat, q, re.IGNORECASE):
                 cand = m.group(1).strip()
                 if self._is_safe_location_candidate(cand):
                     candidates.append(cand)
 
         # 4. Follow-up / Comparison location patterns (e.g. "aur Patratu?", "or patratu??", "what about Patna?", "and Patna?")
         followup_loc_patterns = [
-            r"(?:what\s+about|how\s+about|and\s+about)\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)\b",
-            r"(?:aur|or|and)\s+([A-Za-z\u0900-\u097F]+(?:\s+[A-Za-z\u0900-\u097F]+)?)(?:\?|\s|$)",
+            r"(?:what\s+about|how\s+about|and\s+about)\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?)\b",
+            r"(?:aur|or|and)\s+([A-Za-z\u0900-\u0D7F]+(?:\s+[A-Za-z\u0900-\u0D7F]+)?)(?:\?|\s|$)",
         ]
         for pat in followup_loc_patterns:
             m = re.search(pat, q, re.IGNORECASE)
@@ -369,10 +384,10 @@ class QueryUnderstandingEngine:
                 if self._is_safe_location_candidate(cand):
                     candidates.append(cand)
 
-        # 5. Explicit Capitalized Entity Tokens (only if query contains non-stop capitalized word)
-        words = re.findall(r"\b[A-Za-z\u0900-\u097F\-]+\b", q)
+        # 5. Non-stopword tokens (including lowercased place names like "ranchi", "patratu", "delhi", "mumbai")
+        words = re.findall(r"\b[A-Za-z\u0900-\u0D7F\-]+\b", q)
         for w in words:
-            if w and w[0].isupper() and self._is_safe_location_candidate(w):
+            if len(w) > 2 and self._is_safe_location_candidate(w):
                 candidates.append(w)
 
         # Deduplicate while preserving order
@@ -447,6 +462,7 @@ class QueryUnderstandingEngine:
                 activity=None,
                 language=lang,
                 is_follow_up=False,
+                confidence=1.0,
                 entities={"raw_query": q}
             )
 
@@ -473,17 +489,17 @@ class QueryUnderstandingEngine:
                 entities={"raw_query": q}
             )
 
-        # 3. Time Reference Extraction (Multilingual & Typo-Tolerant)
+        # 3. Time Reference Extraction (Multilingual & Typo-Tolerant, strictly boundary-aware)
         time_ref = "today"
-        if re.search(r"\b(day\s+after\s+tomm?orr?ow|overmorrow|parso|parson|परसों|ଆରଦିନ)\b", q_lower) or any(w in q_lower for w in ["parso", "parson", "day after tomorrow", "परसों"]):
+        if re.search(r"\b(day\s+after\s+tomm?orr?ow|overmorrow|parso|parson|परसों|ଆରଦିନ)\b", q_lower) or re.search(r"(?<![\w\u0900-\u0D7F])(parso|parson|परसों)(?![\w\u0900-\u0D7F])", q_lower):
             time_ref = "day_after_tomorrow"
-        elif re.search(r"\b(tomm?orr?ow|tmrw|tmr|next\s+day|upcoming\s+day|agle\s+din|kal|कल|ଆସନ୍ତାକାଲି|କାଲି|రేపు|நாளை|কাল|আগামীকাল|उद्या|આવતીકાલે|ನಾಳೆ|നാಳೆ|ਕੱਲ੍ਹ|ਭਲਕੇ)\b", q_lower) or any(w in q_lower for w in ["kal", "tomorrow", "tommorrow", "tomorow", "tommorow", "tmrw", "next day", "upcoming day", "agle din", "कल", "ଆସନ୍ତାକାଲି", "କାଲି", "రేపు", "நாளை", "কাল", "আগামীকাল", "उद्या", "આવતીકાલે", "ನಾಳೆ", "ನಾಳೆ", "ਕੱ_ҳ"]):
+        elif re.search(r"\b(tomm?orr?ow|tmrw|tmr|next\s+day|upcoming\s+day|agle\s+din|kal)\b", q_lower) or re.search(r"(?<![\w\u0900-\u0D7F])(कल|ଆସନ୍ତାକାଲି|କାଲି|రేపు|நாளை|কাল|আগামীকাল|उद्या|આવતીકાલે|ನಾಳೆ|ਕੱଲ੍ਹ|ਭਲਕੇ)(?![\w\u0900-\u0D7F])", q_lower):
             time_ref = "tomorrow"
-        elif re.search(r"\b(weekend|week\s+end|hafta\s+ant|saturday|sunday|शनिवार|रविवार|ଶନିବାର|ରବିବାର|वीकेंड|सप्ताहांत)\b", q_lower) or any(w in q_lower for w in ["weekend", "hafta ant", "saturday", "sunday", "वीकेंड", "सप्ताहांत"]):
+        elif re.search(r"\b(weekend|week\s+end|hafta\s+ant|saturday|sunday)\b", q_lower) or re.search(r"(?<![\w\u0900-\u0D7F])(शनिवार|रविवार|ଶନିବାର|ରବିବାର|वीकेंड|सप्ताहांत)(?![\w\u0900-\u0D7F])", q_lower):
             time_ref = "weekend"
-        elif re.search(r"\b(week|weekly|7\s*days?|5\s*days?|3\s*days?|next\s*days?|upcoming\s*days?|aane\s*wale\s*din|aane\s*wale\s*dino|agle\s*din|agle\s*kuch\s*din|agle\s*[0-9]+\s*din|सप्ताह|आने\s*वाले|ଆସନ୍ତା\s*[୦-୯0-9]+\s*ଦିନ|ଆସନ୍ତା\s*ଦିନ)\b", q_lower) or any(w in q_lower for w in ["week", "7 days", "5 days", "3 days", "upcoming days", "aane wale", "aane wale din", "aane wale dino", "agle kuch din", "weekly", "सप्ताह", "आने वाले", "ଆସନ୍ତା"]):
+        elif re.search(r"\b(week|weekly|7\s*days?|5\s*days?|3\s*days?|next\s*days?|upcoming\s*days?|aane\s*wale\s*din|aane\s*wale\s*dino|agle\s*din|agle\s*kuch\s*din|agle\s*[0-9]+\s*din|सप्ताह|आने\s*वाले|ଆସନ୍ତା\s*[୦-୯0-9]+\s*ଦିନ|ଆସନ୍ତା\s*ଦିନ)\b", q_lower) or re.search(r"(?<![\w\u0900-\u0D7F])(सप्ताह|आने वाले)(?![\w\u0900-\u0D7F])", q_lower):
             time_ref = "next_7_days"
-        elif re.search(r"\b(yesterday|beeta\s+kal|history|past|archive|पिछला)\b", q_lower) or any(w in q_lower for w in ["yesterday", "beeta kal", "history", "past"]):
+        elif re.search(r"\b(yesterday|beeta\s+kal|history|past|archive)\b", q_lower) or re.search(r"(?<![\w\u0900-\u0D7F])(पिछला)(?![\w\u0900-\u0D7F])", q_lower):
             time_ref = "historical"
 
         # 4. Location Extraction via Safe Candidate Resolver

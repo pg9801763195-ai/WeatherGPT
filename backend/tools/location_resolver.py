@@ -11,6 +11,36 @@ from schemas.weather_schemas import GeoLocation
 from config import AgentConfig
 
 
+INDIC_CITY_ALIASES: Dict[str, str] = {
+    # Odia Script Places
+    "ପୁରୀ": "Puri", "ଜଟଣୀ": "Jatani", "ଜଟଣି": "Jatani", "ଭୁବନେଶ୍ୱର": "Bhubaneswar",
+    "କଟକ": "Cuttack", "ରାଞ୍ଚି": "Ranchi", "ପାଟଣା": "Patna", "ସମ୍ବଲପୁର": "Sambalpur",
+    "ରାଉରକେଲା": "Rourkela", "ବାଲେଶ୍ୱର": "Balasore", "ବ୍ରହ୍ମପୁର": "Berhampur",
+    "ଦିଲ୍ଲୀ": "Delhi", "ମୁମ୍ବାଇ": "Mumbai", "କୋଲକାତା": "Kolkata", "ଚେନ୍ନାଇ": "Chennai",
+    "ବେଙ୍ଗାଲୁରୁ": "Bengaluru", "ହାଇଦ୍ରାବାଦ": "Hyderabad", "ପତ୍ରାତୁ": "Patratu",
+    "ପାତ୍ରାତୁ": "Patratu", "ଅନୁଗୋଳ": "Angul", "କେନ୍ଦୁଝର": "Keonjhar",
+    "ଝାରସୁଗୁଡ଼ା": "Jharsuguda", "ବରଗଡ଼": "Bargarh", "ବଲାଙ୍ଗୀର": "Balangir",
+    "କୋରାପୁଟ": "Koraput", "ରାୟଗଡ଼ା": "Rayagada", "ଢେଙ୍କାନାଳ": "Dhenkanal",
+    "ଯାଜପୁର": "Jajpur", "କେନ୍ଦ୍ରାପଡ଼ା": "Kendrapara", "ଜଗତସିଂହପୁର": "Jagatsinghpur",
+    "ଭଦ୍ରକ": "Bhadrak", "ଖୋର୍ଦ୍ଧା": "Khordha", "ନୟାଗଡ଼": "Nayagarh", "ଗଞ୍ଜାମ": "Ganjam",
+    # Hindi / Devanagari Script Places
+    "पूरी": "Puri", "पुरी": "Puri", "जटनी": "Jatani", "भुवनेश्वर": "Bhubaneswar",
+    "कटक": "Cuttack", "राँची": "Ranchi", "रांची": "Ranchi", "पटना": "Patna",
+    "संबलपुर": "Sambalpur", "राउरकेला": "Rourkela", "बालासोर": "Balasore",
+    "बरहमपुर": "Berhampur", "दिल्ली": "Delhi", "नई दिल्ली": "New Delhi",
+    "मुंबई": "Mumbai", "कोलकाता": "Kolkata", "चेन्नई": "Chennai",
+    "बेंगलुरु": "Bengaluru", "बैंगलोर": "Bengaluru", "हैदराबाद": "Hyderabad",
+    "पतरातू": "Patratu", "वाराणसी": "Varanasi", "काशी": "Varanasi", "लखनऊ": "Lucknow",
+    "कानपुर": "Kanpur", "जयपुर": "Jaipur", "अहमदाबाद": "Ahmedabad", "पुणे": "Pune",
+    "सूरत": "Surat", "इंदौर": "Indore", "भोपाल": "Bhopal", "नागपुर": "Nagpur",
+    "चंडीगढ़": "Chandigarh", "शिमला": "Shimla", "मनाली": "Manali", "श्रीनगर": "Srinagar",
+    "देहरादून": "Dehradun", "ऋषिकेश": "Rishikesh", "हरिद्वार": "Haridwar",
+    "आगरा": "Agra", "प्रयागराज": "Prayagraj", "इलाहाबाद": "Prayagraj", "गया": "Gaya",
+    "मुजफ्फरपुर": "Muzaffarpur", "भागलपुर": "Bhagalpur", "जमशेदपुर": "Jamshedpur",
+    "धनबाद": "Dhanbad", "बोकारो": "Bokaro"
+}
+
+
 class LocationResolver:
     """High-performance geocoding and location disambiguation resolver."""
 
@@ -27,6 +57,11 @@ class LocationResolver:
             return None
 
         clean_name = location_query.strip()
+        
+        # Check Indic script alias map first
+        if clean_name in INDIC_CITY_ALIASES:
+            clean_name = INDIC_CITY_ALIASES[clean_name]
+
         cache_key = clean_name.lower()
 
         # Check cache
