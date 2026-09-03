@@ -123,10 +123,10 @@ export default function OverviewTab() {
 
               <button
                 onClick={() => setActiveTab('assistant')}
-                className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-on-surface hover:bg-white/95 font-label-caps text-xs tracking-wider transition-all shadow-md active:scale-95 font-bold cursor-pointer hover:shadow-lg"
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-surface text-on-surface hover:bg-surface-container font-label-caps text-xs tracking-wider transition-all shadow-md active:scale-95 font-bold cursor-pointer hover:shadow-lg border border-outline-variant/30"
               >
                 <span className="material-symbols-outlined text-primary text-base">auto_awesome</span>
-                {t('askWeatherGpt')}
+                <span>{t('askWeatherGpt')}</span>
               </button>
             </div>
           </div>
