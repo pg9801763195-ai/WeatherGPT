@@ -76,14 +76,14 @@ VOCAB_STOPWORDS = {
     "barish", "baarish", "pani", "dhan", "chawal", "gehu", "fasal", "kheti", "spray",
     "chhidkaw", "kare", "karein", "karna", "sakte", "sakta", "sakti", "chahiye",
     # Regional Indian language vocabulary that must NEVER be geocoded
-    "paus", "padel", "padnar", "ahe", "aahe", "kasa", "kashi", "madhe", "un", "thandi", "sanga",
-    "varsham", "paduthunda", "padtada", "padutundha", "ela", "undi", "undhi", "lo", "yenda", "gali", "goda", "cheppandi",
-    "mazhai", "peyyuma", "varuma", "eppadi", "irukku", "la", "veiyil", "kulir", "kaatru", "sollunga",
-    "barsa", "barsha", "heba", "hebo", "kipari", "kemiti", "re", "chata", "pani", "ajira", "kali", "paga",
-    "brishti", "bristi", "hobe", "kemon", "achhe", "te", "gorom", "thanda", "ajke", "kalke", "abohawa",
+    "paus", "padel", "padnar", "ahe", "aahe", "kasa", "kashi", "kase", "madhe", "un", "thandi", "sanga", "havaman", "havaamaan",
+    "varsham", "vaana", "paduthunda", "padtada", "padutundha", "ela", "undi", "undhi", "untundi", "lo", "yenda", "gali", "goda", "cheppandi", "vatavaranam", "vaatavaranam",
+    "mazhai", "malai", "peyyuma", "varuma", "eppadi", "irukku", "la", "veiyil", "veyil", "kulir", "kaatru", "sollunga", "vanilai", "vaanilai",
+    "barsa", "barsha", "heba", "hebo", "kipari", "kemiti", "re", "chata", "pani", "paga", "panipaga", "panipagaa", "paanipaaga", "tapamatra", "ajira", "kali", "asantakali", "kahantu",
+    "brishti", "bristi", "hobe", "kemon", "achhe", "te", "gorom", "thanda", "ajke", "kalke", "abohawa", "abhowa", "abohaowa", "bolun",
     "varsad", "padse", "kevo", "chhe", "ma", "garmi", "chhatri", "aaje", "kale",
-    "male", "barutha", "hegide", "nalli", "bisi", "seke", "chatri", "heli",
-    "mazha", "peyyumo", "enganeyundu", "il", "choodu", "kuda", "parayu",
+    "male", "barutha", "hegide", "nalli", "bisi", "seke", "chatri", "heli", "havamana",
+    "mazha", "peyyumo", "enganeyundu", "il", "choodu", "kuda", "parayu", "kalavastha",
     "meenh", "painda", "kiven", "ch", "thand", "dasso",
     # Devanagari & Indic general words
     "क्या", "आज", "में", "बारिश", "होगी", "छाता", "साथ", "रखें", "अभी", "बाहर",
@@ -301,41 +301,52 @@ class QueryUnderstandingEngine:
         # Roman script transliteration markers
         words = set(re.findall(r"\b[a-zA-Z]+\b", text.lower()))
 
-        odia_roman = {"re", "heba", "hebo", "kipari", "barsa", "barsha", "pani", "chata", "ajira", "kali", "paga", "asiba", "kariba", "surakshita", "kemiti", "achhi", "achi", "hele", "thare", "kana", "kete"}
-        if len(words.intersection(odia_roman)) >= 1:
-            return "or"
+        odia_roman = {
+            "re", "heba", "hebo", "kipari", "kemiti", "barsa", "barsha", "barshaa", "pani", "paga",
+            "panipaga", "panipagaa", "paanipaaga", "tapamatra", "taapamaatra", "tapamtra", "paban", "pabana",
+            "chata", "ajira", "kali", "asanta", "asantakali", "gata", "gatakali", "asiba", "kariba",
+            "surakshita", "achhi", "achi", "hele", "thare", "kana", "kete", "kahantu", "janantu", "bataantu", "ku", "ru"
+        }
 
-        bengali_roman = {"te", "brishti", "hobe", "kemon", "achhe", "ache", "chata", "gorom", "thanda", "bataas", "batash", "bristi", "ajke", "kalke", "abohawa", "abhowa", "bhalo"}
-        if len(words.intersection(bengali_roman)) >= 1:
-            return "bn"
+        bengali_roman = {
+            "te", "brishti", "bristi", "hobe", "kemon", "achhe", "ache", "chata", "gorom", "thanda",
+            "bataas", "batash", "ajke", "kalke", "abohawa", "abhowa", "abohaowa", "tapmatra", "bhalo", "bolun", "janan"
+        }
 
-        telugu_roman = {"lo", "varsham", "paduthunda", "padtada", "ela", "undi", "undhi", "chali", "yenda", "gali", "goda", "repu", "cheppandi", "vundhi", "vuntundhi", "untundi"}
-        if len(words.intersection(telugu_roman)) >= 1:
-            return "te"
+        telugu_roman = {
+            "lo", "varsham", "vaana", "paduthunda", "padtada", "padutundha", "ela", "undi", "undhi", "untundi",
+            "chali", "yenda", "gali", "gaali", "repu", "cheppandi", "vundhi", "vuntundhi", "vatavaranam", "vaatavaranam",
+            "ushnogratha", "eroju", "eppudu"
+        }
 
-        tamil_roman = {"la", "mazhai", "peyyuma", "varuma", "eppadi", "irukku", "veiyil", "kulir", "kaatru", "kodai", "innaiku", "naalaiku", "sollunga"}
-        if len(words.intersection(tamil_roman)) >= 1:
-            return "ta"
+        tamil_roman = {
+            "la", "mazhai", "malai", "peyyuma", "varuma", "eppadi", "irukku", "irukkum", "veiyil", "veyil",
+            "kulir", "kaatru", "kodai", "innaiku", "naalaiku", "sollunga", "vanilai", "vaanilai", "veppanilai"
+        }
 
-        marathi_roman = {"madhe", "paus", "padel", "kasa", "aahe", "ahe", "thandi", "un", "kapde", "sheti", "aajcha", "udya", "sang", "sanga"}
-        if len(words.intersection(marathi_roman)) >= 1:
-            return "mr"
+        marathi_roman = {
+            "madhe", "paus", "paaus", "padel", "padnar", "kasa", "kashi", "kase", "aahe", "ahe", "thandi",
+            "un", "kapde", "sheti", "aajcha", "udya", "sang", "sanga", "havaman", "havaamaan", "tapman", "taapmaan"
+        }
 
-        gujarati_roman = {"ma", "varsad", "padse", "kevo", "chhe", "garmi", "chhatri", "aaje", "kale", "kaho", "hawaamaan"}
-        if len(words.intersection(gujarati_roman)) >= 1:
-            return "gu"
+        gujarati_roman = {
+            "ma", "varsad", "vaarsad", "padse", "kevo", "kevi", "chhe", "garmi", "chhatri", "aaje", "kale",
+            "kaho", "hawaamaan", "havaman", "tapman"
+        }
 
-        kannada_roman = {"nalli", "male", "barutha", "hegide", "bisi", "seke", "chali", "chatri", "ee dina", "nale", "heli"}
-        if len(words.intersection(kannada_roman)) >= 1:
-            return "kn"
+        kannada_roman = {
+            "nalli", "male", "barutha", "baruttada", "hegide", "bisi", "seke", "chali", "chatri", "ee dina",
+            "nale", "heli", "havamana", "havaamaana"
+        }
 
-        malayalam_roman = {"il", "mazha", "peyyumo", "enganeyundu", "choodu", "kuda", "innu", "nale", "parayu"}
-        if len(words.intersection(malayalam_roman)) >= 1:
-            return "ml"
+        malayalam_roman = {
+            "il", "mazha", "peyyumo", "varumo", "enganeyundu", "choodu", "thanuppu", "kuda", "innu", "nale",
+            "parayu", "kalavastha", "kaalavastha"
+        }
 
-        punjabi_roman = {"ch", "meenh", "painda", "kiven", "thand", "chhatri", "aj", "dasso"}
-        if len(words.intersection(punjabi_roman)) >= 1:
-            return "pa"
+        punjabi_roman = {
+            "ch", "meenh", "painda", "kiven", "thand", "garmi", "chhatri", "aj", "dasso", "mausam", "mosam", "hovega"
+        }
 
         hindi_roman = {
             "ka", "ki", "ke", "ko", "kya", "hai", "hain", "aaj", "kal", "parso", "parson", "kaise", "kaisa", "kaisi", "raha", "rahi", "rahe",
@@ -343,10 +354,32 @@ class QueryUnderstandingEngine:
             "bhai", "yaar", "batao", "bataiye", "bata", "btao", "dhup", "dhoop", "garmi", "thand", "thandi", "kapde",
             "khelna", "badhiya", "achha", "accha", "theek", "nahi", "nahin", "dhan", "ghumne", "ghumna",
             "jaana", "jana", "gaadi", "chata", "pehnu", "pehnna", "pehne", "sukha", "sukhana", "sukhayein", "kheti",
-            "chhidkaw", "fasal", "paani", "mein", "kitna", "bhi"
+            "chhidkaw", "fasal", "paani", "mein", "kitna", "bhi", "mausam", "tapman"
         }
-        if len(words.intersection(hindi_roman)) >= 1:
-            return "hi"
+
+        lang_marker_sets = {
+            "or": odia_roman,
+            "bn": bengali_roman,
+            "te": telugu_roman,
+            "ta": tamil_roman,
+            "gu": gujarati_roman,
+            "kn": kannada_roman,
+            "ml": malayalam_roman,
+            "pa": punjabi_roman,
+            "mr": marathi_roman,
+            "hi": hindi_roman
+        }
+
+        best_lang = None
+        best_score = 0
+        for lang_code, marker_set in lang_marker_sets.items():
+            score = len(words.intersection(marker_set))
+            if score > best_score:
+                best_score = score
+                best_lang = lang_code
+
+        if best_lang and best_score >= 1:
+            return best_lang
 
         return "en"
 
