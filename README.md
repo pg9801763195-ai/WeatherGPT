@@ -1,6 +1,9 @@
 ﻿# 🌤️ MausamVani (WeatherGPT)
 ### *Next-Generation Multimodal Meteorological AI Agent, Agro-Advisory & Disaster Intelligence System*
 
+🚀 **Live Web Application:** [https://weathergpt-6uxp.onrender.com/](https://weathergpt-6uxp.onrender.com/)
+
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Render_Web_App-46E3B7.svg?logo=render&logoColor=white)](https://weathergpt-6uxp.onrender.com/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18.x-61DAFB.svg?logo=react&logoColor=black)](https://reactjs.org/)
